@@ -32,6 +32,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.example.travelmate.domain.model.Category
+import com.example.travelmate.ui.screen.components.TransparentEditField
 import com.example.travelmate.ui.theme.*
 import com.example.travelmate.ui.viewmodel.AuthViewModel
 
@@ -263,28 +264,4 @@ fun EditProfileScreen(
             }
         }
     }
-}
-
-@Composable
-fun TransparentEditField(value: String, onValueChange: (String) -> Unit, placeholder: String, singleLine: Boolean = true) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        placeholder = { Text(placeholder, color = Color.White.copy(alpha = 0.5f), fontSize = 15.sp) },
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 6.dp),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = Color.White.copy(alpha = 0.1f),
-            unfocusedContainerColor = Color.White.copy(alpha = 0.1f),
-            focusedBorderColor = Color.White.copy(alpha = 0.5f),
-            unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
-            focusedTextColor = Color.White,
-            unfocusedTextColor = Color.White,
-            cursorColor = Color.White
-        ),
-        shape = RoundedCornerShape(14.dp),
-        singleLine = singleLine,
-        textStyle = TextStyle(fontSize = 15.sp)
-    )
 }

@@ -289,6 +289,26 @@ class AuthViewModel @Inject constructor(
         _uiState.value = AuthUiState()
     }
 
+    fun changePassword(oldPass: String, newPass: String) {
+        if (oldPass.isEmpty() || newPass.isEmpty()) {
+            _uiState.update { it.copy(error = "Vui lòng nhập đầy đủ thông tin") }
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, error = null) }
+            val result = repository.changePassword(oldPass, newPass)
+            when (result) {
+                is NetworkResult.Success -> {
+                    _uiState.update { it.copy(isLoading = false, isSuccess = true, error = "Đổi mật khẩu thành công!") }
+                }
+                is NetworkResult.Error -> {
+                    _uiState.update { it.copy(isLoading = false, error = result.message) }
+                }
+                else -> {}
+            }
+        }
+    }
+
     fun toggleWishlist(destinationId: String) {
         viewModelScope.launch {
             repository.toggleWishlist(destinationId).collect { result ->

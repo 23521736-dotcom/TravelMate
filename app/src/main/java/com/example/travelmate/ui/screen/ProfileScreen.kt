@@ -13,9 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,6 +43,28 @@ fun ProfileScreen(
     val uiState by viewModel.uiState.collectAsState()
     val homeUiState by homeViewModel.uiState.collectAsState()
     val user = uiState.user
+
+    var showChangePasswordDialog by remember { mutableStateOf(false) }
+
+    if (showChangePasswordDialog) {
+        ChangePasswordDialog(
+            isLoading = uiState.isLoading,
+            error = uiState.error,
+            onDismiss = { 
+                showChangePasswordDialog = false
+                viewModel.clearSuccessState()
+            },
+            onConfirm = { old, new ->
+                viewModel.changePassword(old, new)
+            }
+        )
+    }
+
+    LaunchedEffect(uiState.isSuccess) {
+        if (uiState.isSuccess && showChangePasswordDialog) {
+            // Password changed successfully, handled in AuthViewModel
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -164,19 +184,27 @@ fun ProfileScreen(
         }
 
         Column(modifier = Modifier.padding(24.dp)) {
-            // Simplified Recent Trips
+            // Recent Trips Section
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(text = "Chuyến đi gần đây", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                Text(text = "Xem tất cả", fontSize = 12.sp, color = BluePrimary, fontWeight = FontWeight.Bold)
+                TextButton(onClick = { /* Navigate to Trips tab */ }) {
+                    Text(text = "Xem tất cả", fontSize = 12.sp, color = BluePrimary, fontWeight = FontWeight.Bold)
+                }
             }
             
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             
-            Text(text = "Chưa có chuyến đi nào", color = GrayText, fontSize = 14.sp)
+            if (homeUiState.totalTrips == 0) {
+                Text(text = "Chưa có chuyến đi nào", color = GrayText, fontSize = 14.sp, modifier = Modifier.padding(vertical = 8.dp))
+            } else {
+                // Here we could show a few recent trips if HomeUiState had them. 
+                // For now, let's just show a placeholder that looks better.
+                Text(text = "Bạn có ${homeUiState.totalTrips} chuyến đi trong danh sách.", color = GrayText, fontSize = 14.sp)
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -197,6 +225,9 @@ fun ProfileScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             // Menu Items
+            MenuItem(icon = Icons.Default.Lock, title = "Đổi mật khẩu", onClick = {
+                showChangePasswordDialog = true
+            })
             MenuItem(icon = Icons.Default.Favorite, title = "Danh sách yêu thích", onClick = onWishlistClick)
             MenuItem(icon = Icons.Default.CloudDownload, title = "Nạp dữ liệu địa danh (Seed)", onClick = {
                 viewModel.seedDatabase(onSuccess = {
@@ -208,6 +239,76 @@ fun ProfileScreen(
                 viewModel.logout()
                 onLogoutClick()
             }, isLast = true)
+        }
+    }
+}
+
+@Composable
+fun ChangePasswordDialog(
+    isLoading: Boolean,
+    error: String?,
+    onDismiss: () -> Unit,
+    onConfirm: (String, String) -> Unit
+) {
+    var oldPassword by remember { mutableStateOf("") }
+    var newPassword by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
+
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)),
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                Text(text = "Đổi mật khẩu", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                OutlinedTextField(
+                    value = oldPassword,
+                    onValueChange = { oldPassword = it },
+                    label = { Text("Mật khẩu cũ") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = newPassword,
+                    onValueChange = { newPassword = it },
+                    label = { Text("Mật khẩu mới") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = confirmPassword,
+                    onValueChange = { confirmPassword = it },
+                    label = { Text("Xác nhận mật khẩu mới") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+                )
+                
+                if (error != null) {
+                    Text(text = error, color = Color.Red, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                }
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                Button(
+                    onClick = { onConfirm(oldPassword, newPassword) },
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    enabled = !isLoading && oldPassword.isNotEmpty() && newPassword.isNotEmpty() && newPassword == confirmPassword
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+                    } else {
+                        Text("Xác nhận")
+                    }
+                }
+            }
         }
     }
 }

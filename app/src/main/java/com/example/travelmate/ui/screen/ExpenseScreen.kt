@@ -36,6 +36,7 @@ import java.util.*
 
 @Composable
 fun ExpenseScreen(
+    onAddExpenseClick: () -> Unit,
     viewModel: ExpenseViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -53,92 +54,106 @@ fun ExpenseScreen(
         )
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-    ) {
-        // Header
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(BluePrimary)
-                .padding(24.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    text = "Dashboard Chi Tiêu",
-                    color = Color.White.copy(alpha = 0.8f),
-                    fontSize = 14.sp
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = String.format(Locale.US, "%,.0f VND", uiState.totalSpentVnd),
-                    color = Color.White,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            IconButton(
-                onClick = { showBudgetDialog = true },
-                modifier = Modifier.clip(CircleShape).background(Color.White.copy(alpha = 0.2f))
+    Scaffold(
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = onAddExpenseClick,
+                containerColor = OrangePrimary,
+                contentColor = Color.White,
+                shape = CircleShape
             ) {
-                Icon(Icons.Default.Settings, contentDescription = "Budget Settings", tint = Color.White)
+                Icon(Icons.Default.Add, contentDescription = "Add Expense")
             }
         }
-
-        if (uiState.isLoading && uiState.expenses.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = BluePrimary)
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(20.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp)
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .background(MaterialTheme.colorScheme.background)
+        ) {
+            // Header
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(BluePrimary)
+                    .padding(24.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Monthly Budget Card
-                item {
-                    BudgetOverviewCard(
-                        spent = uiState.currentMonthTotalVnd,
-                        budget = uiState.monthlyBudget?.amount ?: 0.0,
-                        threshold = uiState.monthlyBudget?.thresholdPercent ?: 80
-                    )
-                }
-
-                // Chart Section
-                if (uiState.expenses.isNotEmpty()) {
-                    item {
-                        ExpenseChartCard(expenses = uiState.expenses)
-                    }
-                }
-
-                // Recent Transactions
-                item {
+                Column {
                     Text(
-                        text = "Giao dịch gần đây",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
-                        color = MaterialTheme.colorScheme.onSurface
+                        text = "Dashboard Chi Tiêu",
+                        color = Color.White.copy(alpha = 0.8f),
+                        fontSize = 14.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = String.format(Locale.US, "%,.0f VND", uiState.totalSpentVnd),
+                        color = Color.White,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold
                     )
                 }
-                
-                if (uiState.expenses.isEmpty()) {
+                IconButton(
+                    onClick = { showBudgetDialog = true },
+                    modifier = Modifier.clip(CircleShape).background(Color.White.copy(alpha = 0.2f))
+                ) {
+                    Icon(Icons.Default.Settings, contentDescription = "Budget Settings", tint = Color.White)
+                }
+            }
+
+            if (uiState.isLoading && uiState.expenses.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = BluePrimary)
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                ) {
+                    // Monthly Budget Card
                     item {
-                        Box(modifier = Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) {
-                            Text(text = "Chưa có dữ liệu chi tiêu", color = GrayText)
+                        BudgetOverviewCard(
+                            spent = uiState.currentMonthTotalVnd,
+                            budget = uiState.monthlyBudget?.amount ?: 0.0,
+                            threshold = uiState.monthlyBudget?.thresholdPercent ?: 80
+                        )
+                    }
+
+                    // Chart Section
+                    if (uiState.expenses.isNotEmpty()) {
+                        item {
+                            ExpenseChartCard(expenses = uiState.expenses)
                         }
                     }
-                } else {
-                    items(uiState.expenses.take(10)) { expense ->
-                        GlobalExpenseItem(
-                            category = expense.category,
-                            description = expense.description,
-                            amount = String.format(Locale.US, "%,.0f %s", expense.amount, expense.currency),
-                            icon = Icons.Default.Payments
+
+                    // Recent Transactions
+                    item {
+                        Text(
+                            text = "Giao dịch gần đây",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
+                    }
+                    
+                    if (uiState.expenses.isEmpty()) {
+                        item {
+                            Box(modifier = Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) {
+                                Text(text = "Chưa có dữ liệu chi tiêu", color = GrayText)
+                            }
+                        }
+                    } else {
+                        items(uiState.expenses.take(10)) { expense ->
+                            GlobalExpenseItem(
+                                category = expense.category,
+                                description = expense.description,
+                                amount = String.format(Locale.US, "%,.0f %s", expense.amount, expense.currency),
+                                icon = Icons.Default.Payments
+                            )
+                        }
                     }
                 }
             }

@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.travelmate.domain.model.Category
+import com.example.travelmate.ui.screen.components.TransparentEditField
 import com.example.travelmate.ui.theme.BlueHeader
 import com.example.travelmate.ui.theme.BluePrimary
 import com.example.travelmate.ui.viewmodel.AuthViewModel
@@ -30,7 +31,26 @@ fun InterestSelectionScreen(
     viewModel: AuthViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val user = uiState.user
+
+    var name by remember { mutableStateOf("") }
+    var handle by remember { mutableStateOf("") }
+    var location by remember { mutableStateOf("") }
+    var bio by remember { mutableStateOf("") }
     val selectedInterests = remember { mutableStateListOf<Category>() }
+
+    // Initialize fields from current user data if available
+    LaunchedEffect(user) {
+        if (user != null && name.isEmpty()) {
+            name = user.fullName ?: ""
+            handle = user.handle ?: ""
+            location = user.location ?: ""
+            bio = user.bio ?: ""
+            if (selectedInterests.isEmpty()) {
+                selectedInterests.addAll(user.interests)
+            }
+        }
+    }
 
     LaunchedEffect(uiState.isSuccess) {
         if (uiState.isSuccess) {
@@ -54,29 +74,47 @@ fun InterestSelectionScreen(
         Spacer(modifier = Modifier.height(48.dp))
         
         Text(
-            text = "Bạn thích gì?",
+            text = "Thiết lập hồ sơ",
             fontSize = 28.sp,
             fontWeight = FontWeight.Bold,
             color = Color.White,
             textAlign = TextAlign.Center
         )
         
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         
         Text(
-            text = "Chọn ít nhất 3 sở thích để chúng tôi gợi ý những chuyến đi tuyệt vời nhất cho bạn.",
-            fontSize = 16.sp,
-            color = Color.White.copy(alpha = 0.8f),
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 16.dp)
+            text = "Hãy cho chúng tôi biết thêm về bạn để có trải nghiệm cá nhân hóa.",
+            fontSize = 15.sp,
+            color = Color.White.copy(alpha = 0.7f),
+            textAlign = TextAlign.Center
         )
         
-        Spacer(modifier = Modifier.height(48.dp))
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // Profile Fields
+        TransparentEditField(value = name, onValueChange = { name = it }, placeholder = "Họ và tên")
+        TransparentEditField(value = handle, onValueChange = { handle = it }, placeholder = "@username")
+        TransparentEditField(value = location, onValueChange = { location = it }, placeholder = "Vị trí (vd: Hà Nội, Việt Nam)")
+        TransparentEditField(value = bio, onValueChange = { bio = it }, placeholder = "Giới thiệu bản thân", singleLine = false)
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        Text(
+            text = "Sở thích du lịch (chọn ít nhất 3)",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.White,
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = TextAlign.Start
+        )
+        
+        Spacer(modifier = Modifier.height(16.dp))
 
         androidx.compose.foundation.layout.FlowRow(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.Start,
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Category.entries.forEach { category ->
                 val isSelected = selectedInterests.contains(category)
@@ -85,48 +123,46 @@ fun InterestSelectionScreen(
                         if (isSelected) selectedInterests.remove(category)
                         else selectedInterests.add(category)
                     },
-                    shape = RoundedCornerShape(24.dp),
-                    color = if (isSelected) Color.White else Color.White.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(20.dp),
+                    color = if (isSelected) Color.White else Color.White.copy(alpha = 0.1f),
                     border = androidx.compose.foundation.BorderStroke(
                         1.dp, 
                         if (isSelected) Color.White else Color.White.copy(alpha = 0.3f)
                     )
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         if (isSelected) {
                             Icon(
                                 Icons.Default.Check, 
                                 contentDescription = null, 
-                                modifier = Modifier.size(16.dp), 
+                                modifier = Modifier.size(14.dp), 
                                 tint = BluePrimary
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
                         }
                         Text(
                             text = category.displayName,
-                            fontSize = 14.sp,
+                            fontSize = 12.sp,
                             color = if (isSelected) BluePrimary else Color.White,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                         )
                     }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.weight(1f))
         Spacer(modifier = Modifier.height(48.dp))
 
         Button(
             onClick = {
-                val user = uiState.user ?: return@Button
                 viewModel.updateFullProfile(
-                    name = user.fullName ?: "Traveler",
-                    handle = user.handle,
-                    location = user.location,
-                    bio = user.bio,
+                    name = name,
+                    handle = handle,
+                    location = location,
+                    bio = bio,
                     interests = selectedInterests.toList()
                 )
             },
@@ -135,7 +171,7 @@ fun InterestSelectionScreen(
                 .height(56.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Color.White),
             shape = RoundedCornerShape(16.dp),
-            enabled = selectedInterests.size >= 3 && !uiState.isLoading
+            enabled = selectedInterests.size >= 3 && name.isNotEmpty() && !uiState.isLoading
         ) {
             if (uiState.isLoading) {
                 CircularProgressIndicator(modifier = Modifier.size(24.dp), color = BluePrimary)

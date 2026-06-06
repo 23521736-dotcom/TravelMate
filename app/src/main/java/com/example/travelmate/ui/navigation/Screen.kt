@@ -14,8 +14,8 @@ sealed class Screen(val route: String) {
     object TripDetail : Screen("trip_detail/{tripId}") {
         fun createRoute(tripId: String) = "trip_detail/$tripId"
     }
-    object AddExpense : Screen("add_expense/{tripId}") {
-        fun createRoute(tripId: String) = "add_expense/$tripId"
+    object AddExpense : Screen("add_expense?tripId={tripId}") {
+        fun createRoute(tripId: String? = null) = if (tripId != null) "add_expense?tripId=$tripId" else "add_expense"
     }
     object EditTrip : Screen("edit_trip/{tripId}") {
         fun createRoute(tripId: String) = "edit_trip/$tripId"

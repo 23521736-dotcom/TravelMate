@@ -19,6 +19,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.travelmate.ui.screen.components.formatTimestamp
+import com.example.travelmate.ui.screen.components.getNotifConfig
 import com.example.travelmate.ui.theme.*
 import com.example.travelmate.ui.viewmodel.NotificationViewModel
 
@@ -124,6 +126,8 @@ fun NotificationDetailScreen(
                             text = when(notification.type) {
                                 "trip_start" -> "Xem chuyến đi"
                                 "budget" -> "Quản lý chi tiêu"
+                                "explore", "promotion" -> "Khám phá ngay"
+                                "destination" -> "Xem địa điểm"
                                 else -> "Xem chi tiết"
                             },
                             fontSize = 16.sp,

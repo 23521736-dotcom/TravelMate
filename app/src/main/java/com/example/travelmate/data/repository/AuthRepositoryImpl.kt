@@ -502,4 +502,21 @@ class AuthRepositoryImpl @Inject constructor(
             emit(NetworkResult.Error(e.message ?: "Upload failed"))
         }
     }
+
+    override suspend fun changePassword(oldPassword: String, newPassword: String): NetworkResult<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val user = firebaseAuth.currentUser ?: return@withContext NetworkResult.Error("Chưa đăng nhập")
+            val email = user.email ?: return@withContext NetworkResult.Error("Không tìm thấy email")
+            
+            // Re-authenticate
+            val credential = com.google.firebase.auth.EmailAuthProvider.getCredential(email, oldPassword)
+            user.reauthenticate(credential).await()
+            
+            // Update password
+            user.updatePassword(newPassword).await()
+            NetworkResult.Success(Unit)
+        } catch (e: Exception) {
+            NetworkResult.Error("Lỗi đổi mật khẩu: ${e.message}")
+        }
+    }
 }

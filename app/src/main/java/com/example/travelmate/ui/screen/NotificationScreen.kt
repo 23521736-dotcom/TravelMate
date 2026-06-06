@@ -24,10 +24,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.travelmate.domain.model.Notification
+import com.example.travelmate.ui.screen.components.formatTimestamp
+import com.example.travelmate.ui.screen.components.getNotifConfig
 import com.example.travelmate.ui.theme.*
 import com.example.travelmate.ui.viewmodel.NotificationViewModel
-import java.text.SimpleDateFormat
-import java.util.*
+import androidx.compose.foundation.lazy.items
 
 @Composable
 fun NotificationScreen(
@@ -139,21 +140,4 @@ fun EmptyNotificationsPlaceholder() {
         Spacer(modifier = Modifier.height(16.dp))
         Text(text = "Bạn không có thông báo nào", color = GrayText)
     }
-}
-
-data class NotifConfig(val icon: ImageVector, val bgColor: Color, val tint: Color)
-
-@Composable
-fun getNotifConfig(type: String): NotifConfig {
-    return when(type) {
-        "trip_start" -> NotifConfig(Icons.Default.FlightTakeoff, Color(0xFFE3F2FD), BluePrimary)
-        "budget" -> NotifConfig(Icons.Default.Paid, Color(0xFFFFF3E0), OrangePrimary)
-        "welcome" -> NotifConfig(Icons.Default.NotificationsActive, Color(0xFFF3E5F5), PurplePrimary)
-        else -> NotifConfig(Icons.Default.Info, Color(0xFFF5F5F5), GrayText)
-    }
-}
-
-fun formatTimestamp(timestamp: Long): String {
-    val sdf = SimpleDateFormat("HH:mm, dd MMM", Locale.US)
-    return sdf.format(Date(timestamp))
 }

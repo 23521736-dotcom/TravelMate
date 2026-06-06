@@ -34,6 +34,7 @@ fun MainContainer(
     onTripClick: (String) -> Unit,
     onEditProfileClick: () -> Unit,
     onWishlistClick: () -> Unit,
+    onAddExpenseClick: () -> Unit,
     onDestinationClick: (String) -> Unit,
     onNotificationsClick: () -> Unit,
     onSettingsClick: () -> Unit,
@@ -101,7 +102,7 @@ fun MainContainer(
                     authViewModel = authViewModel
                 )
                 is NavItem.Trips -> MyTripsScreen(onAddTripClick = onPlanTripClick, onTripClick = onTripClick)
-                is NavItem.Expense -> ExpenseScreen()
+                is NavItem.Expense -> ExpenseScreen(onAddExpenseClick = { onAddExpenseClick() })
                 is NavItem.Profile -> ProfileScreen(
                     onEditProfileClick = onEditProfileClick,
                     onWishlistClick = onWishlistClick,

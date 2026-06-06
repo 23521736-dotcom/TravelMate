@@ -26,10 +26,15 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.travelmate.ui.theme.*
 import com.example.travelmate.ui.viewmodel.AddExpenseViewModel
+import java.text.SimpleDateFormat
+import java.util.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddExpenseScreen(
-    tripId: String,
+    tripId: String?,
     onBackClick: () -> Unit,
     onSaveClick: () -> Unit,
     viewModel: AddExpenseViewModel = hiltViewModel()
@@ -40,11 +45,40 @@ fun AddExpenseScreen(
     var selectedCurrency by remember { mutableStateOf("VND") }
     var selectedCategory by remember { mutableStateOf("Food") }
     var description by remember { mutableStateOf("") }
-    var date by remember { mutableStateOf("24/02/2026") }
+    
+    val dateFormatter = remember { SimpleDateFormat("dd/MM/yyyy", Locale.US) }
+    var dateInMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var showDatePicker by remember { mutableStateOf(false) }
+
+    val suggestionsMap = mapOf(
+        "Food" to listOf("Ăn trưa", "Ăn tối", "Cà phê", "Trà sữa", "Bữa phụ"),
+        "Transport" to listOf("Grab/Taxi", "Vé máy bay", "Xăng xe", "Thuê xe", "Vé xe khách"),
+        "Stay" to listOf("Khách sạn", "Homestay", "Resort", "AirBnB", "Ký túc xá"),
+        "Activities" to listOf("Vé tham quan", "Tour du lịch", "Trò chơi", "Lặn biển", "Leo núi"),
+        "Shopping" to listOf("Quà lưu niệm", "Quần áo", "Đặc sản", "Mỹ phẩm", "Đồ điện tử")
+    )
 
     LaunchedEffect(uiState.isSuccess) {
         if (uiState.isSuccess) {
             onSaveClick()
+        }
+    }
+
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = dateInMillis)
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    dateInMillis = datePickerState.selectedDateMillis ?: dateInMillis
+                    showDatePicker = false
+                }) { Text("Chọn") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text("Hủy") }
+            }
+        ) {
+            DatePicker(state = datePickerState)
         }
     }
 
@@ -72,7 +106,7 @@ fun AddExpenseScreen(
             Button(
                 onClick = { 
                     keyboardController?.hide()
-                    viewModel.addExpense(tripId, amount, selectedCategory, description, date) 
+                    viewModel.addExpense(tripId, amount, selectedCategory, description, dateFormatter.format(Date(dateInMillis))) 
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
                 shape = RoundedCornerShape(12.dp),
@@ -83,6 +117,7 @@ fun AddExpenseScreen(
         }
 
         // Amount Section
+        // ... (keep amount section as is, maybe tweak quick buttons)
         Surface(
             modifier = Modifier.padding(20.dp).fillMaxWidth(),
             color = MaterialTheme.colorScheme.surface,
@@ -225,15 +260,41 @@ fun AddExpenseScreen(
                     focusedTextColor = MaterialTheme.colorScheme.onSurface
                 )
             )
+
+            // Suggestions
+            val currentSuggestions = suggestionsMap[selectedCategory] ?: emptyList()
+            if (currentSuggestions.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(currentSuggestions) { suggest ->
+                        SuggestionChip(
+                            onClick = { description = suggest },
+                            label = { Text(suggest) },
+                            colors = SuggestionChipDefaults.suggestionChipColors(
+                                containerColor = OrangePrimary.copy(alpha = 0.05f),
+                                labelColor = OrangePrimary
+                            ),
+                            border = SuggestionChipDefaults.suggestionChipBorder(
+                                borderColor = OrangePrimary.copy(alpha = 0.2f),
+                                enabled = true
+                            )
+                        )
+                    }
+                }
+            }
             
             Spacer(modifier = Modifier.height(16.dp))
 
             OutlinedTextField(
-                value = date,
-                onValueChange = { date = it },
+                value = dateFormatter.format(Date(dateInMillis)),
+                onValueChange = { },
                 label = { Text("NGÀY CHI TIÊU", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
-                trailingIcon = { Icon(Icons.Default.CalendarMonth, contentDescription = null) },
-                modifier = Modifier.fillMaxWidth(),
+                trailingIcon = { 
+                    IconButton(onClick = { showDatePicker = true }) {
+                        Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = OrangePrimary) 
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().clickable { showDatePicker = true },
                 shape = RoundedCornerShape(16.dp),
                 readOnly = true,
                 colors = OutlinedTextFieldDefaults.colors(
@@ -254,7 +315,7 @@ fun AddExpenseScreen(
             Button(
                 onClick = { 
                     keyboardController?.hide()
-                    viewModel.addExpense(tripId, amount, selectedCategory, description, date) 
+                    viewModel.addExpense(tripId, amount, selectedCategory, description, dateFormatter.format(Date(dateInMillis)))
                 },
                 modifier = Modifier.fillMaxWidth().height(58.dp),
                 shape = RoundedCornerShape(16.dp),

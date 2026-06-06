@@ -31,4 +31,5 @@ interface AuthRepository {
     suspend fun setFirstTime(isFirst: Boolean)
     fun toggleWishlist(destinationId: String): Flow<NetworkResult<Boolean>>
     fun uploadImage(path: String, byteArray: ByteArray): Flow<NetworkResult<String>>
+    suspend fun changePassword(oldPassword: String, newPassword: String): NetworkResult<Unit>
 }

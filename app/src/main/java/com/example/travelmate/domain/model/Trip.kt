@@ -57,6 +57,7 @@ data class TripActivity(
     @get:PropertyName("location") @set:PropertyName("location") var location: String = "",
     @get:PropertyName("note") @set:PropertyName("note") var note: String = "",
     @get:PropertyName("type") @set:PropertyName("type") var type: String = "Sightseeing", // Sightseeing, Food, Activity, Transport, Shopping, Leisure, Stay
+    @get:PropertyName("imageUrl") @set:PropertyName("imageUrl") var imageUrl: String? = null,
     @SerialName("isDone") @get:PropertyName("isDone") @set:PropertyName("isDone") var done: Boolean = false,
     @get:PropertyName("linkedExpenseId") @set:PropertyName("linkedExpenseId") var linkedExpenseId: String? = null
 ) {

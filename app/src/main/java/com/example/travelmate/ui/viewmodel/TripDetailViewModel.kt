@@ -119,14 +119,45 @@ class TripDetailViewModel @Inject constructor(
         return amount * rate
     }
 
-    fun addActivity(dayIndex: Int, title: String, time: String, location: String, type: String, note: String) {
+    fun saveActivity(
+        dayIndex: Int,
+        activity: TripActivity,
+        imageBytes: ByteArray? = null
+    ) {
         val tripId = _uiState.value.trip?.id ?: return
-        val activity = TripActivity(title = title, time = time, location = location, type = type, note = note)
         
         viewModelScope.launch {
-            tripRepository.addActivity(tripId, dayIndex, activity).collect { result ->
-                if (result is NetworkResult.Success) {
-                    getTrip(tripId)
+            _uiState.update { it.copy(isLoading = true) }
+            
+            var finalActivity = activity
+            
+            if (imageBytes != null) {
+                val timestamp = System.currentTimeMillis()
+                val randomStr = UUID.randomUUID().toString().take(6)
+                val path = "trips/$tripId/activities/${timestamp}_$randomStr.jpg"
+                
+                tripRepository.uploadImage(path, imageBytes).collect { result ->
+                    if (result is NetworkResult.Success) {
+                        finalActivity = finalActivity.copy(imageUrl = result.data)
+                    }
+                }
+            }
+            
+            val flow = if (activity.id.isEmpty()) {
+                tripRepository.addActivity(tripId, dayIndex, finalActivity)
+            } else {
+                tripRepository.updateActivity(tripId, dayIndex, finalActivity)
+            }
+            
+            flow.collect { result ->
+                when (result) {
+                    is NetworkResult.Success -> {
+                        _uiState.update { it.copy(isLoading = false, error = null) }
+                    }
+                    is NetworkResult.Error -> {
+                        _uiState.update { it.copy(isLoading = false, error = result.message) }
+                    }
+                    else -> {}
                 }
             }
         }
@@ -140,6 +171,12 @@ class TripDetailViewModel @Inject constructor(
                     getTrip(tripId)
                 }
             }
+        }
+    }
+
+    fun deleteExpense(expenseId: String) {
+        viewModelScope.launch {
+            tripRepository.deleteExpense(expenseId).collect { }
         }
     }
 
@@ -171,6 +208,17 @@ class TripDetailViewModel @Inject constructor(
         val tripId = _uiState.value.trip?.id ?: return
         viewModelScope.launch {
             tripRepository.addGalleryPhoto(tripId, url).collect { result ->
+                if (result is NetworkResult.Success) {
+                    getTrip(tripId)
+                }
+            }
+        }
+    }
+
+    fun deletePhoto(url: String) {
+        val tripId = _uiState.value.trip?.id ?: return
+        viewModelScope.launch {
+            tripRepository.deleteGalleryPhoto(tripId, url).collect { result ->
                 if (result is NetworkResult.Success) {
                     getTrip(tripId)
                 }

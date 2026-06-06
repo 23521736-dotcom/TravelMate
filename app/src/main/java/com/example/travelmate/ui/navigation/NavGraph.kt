@@ -129,6 +129,7 @@ fun NavGraph(
                     },
                     onEditProfileClick = { navController.navigate(Screen.EditProfile.route) },
                     onWishlistClick = { navController.navigate(Screen.Wishlist.route) },
+                    onAddExpenseClick = { navController.navigate(Screen.AddExpense.createRoute()) },
                     onDestinationClick = { id -> 
                         navController.navigate(Screen.DestinationDetail.createRoute(id))
                     },
@@ -192,9 +193,13 @@ fun NavGraph(
             }
             composable(
                 route = Screen.AddExpense.route,
-                arguments = listOf(navArgument("tripId") { type = NavType.StringType })
+                arguments = listOf(navArgument("tripId") { 
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                })
             ) { backStackEntry ->
-                val tripId = backStackEntry.arguments?.getString("tripId") ?: ""
+                val tripId = backStackEntry.arguments?.getString("tripId")
                 AddExpenseScreen(
                     tripId = tripId,
                     onBackClick = { navController.popBackStack() },
@@ -248,7 +253,15 @@ fun NavGraph(
                         if (id != null) {
                             when(type) {
                                 "trip_start", "budget" -> navController.navigate(Screen.TripDetail.createRoute(id))
-                                // else handle other types
+                                "destination" -> navController.navigate(Screen.DestinationDetail.createRoute(id))
+                                "explore", "promotion" -> {
+                                    if (id.startsWith("landmark_")) {
+                                        navController.navigate(Screen.DestinationDetail.createRoute(id))
+                                    } else {
+                                        navController.navigate(Screen.Main.route)
+                                    }
+                                }
+                                else -> navController.navigate(Screen.Main.route)
                             }
                         }
                     }

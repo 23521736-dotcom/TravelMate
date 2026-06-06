@@ -168,6 +168,33 @@ class TripRepositoryImpl @Inject constructor(
         awaitClose()
     }
 
+    override fun updateActivity(tripId: String, dayIndex: Int, activity: TripActivity): Flow<NetworkResult<Unit>> = callbackFlow {
+        trySend(NetworkResult.Loading)
+        tripsRef.child(tripId).get().addOnSuccessListener { snapshot ->
+            val trip = snapshot.getValue(Trip::class.java)
+            if (trip != null && dayIndex < trip.itinerary.size) {
+                val updatedItinerary = trip.itinerary.toMutableList()
+                val day = updatedItinerary[dayIndex]
+                val updatedActivities = day.activities.map { 
+                    if (it.id == activity.id) activity else it
+                }
+                updatedItinerary[dayIndex] = day.copy(activities = updatedActivities)
+                tripsRef.child(tripId).child("itinerary").setValue(updatedItinerary)
+                    .addOnSuccessListener {
+                        trySend(NetworkResult.Success(Unit))
+                        close()
+                    }.addOnFailureListener { e ->
+                        trySend(NetworkResult.Error(e.message ?: "Lỗi cập nhật hoạt động"))
+                        close()
+                    }
+            } else {
+                trySend(NetworkResult.Error("Không tìm thấy Trip hoặc Ngày"))
+                close()
+            }
+        }
+        awaitClose()
+    }
+
     override fun toggleActivityDone(tripId: String, dayIndex: Int, activityId: String): Flow<NetworkResult<Unit>> = callbackFlow {
         trySend(NetworkResult.Loading)
         tripsRef.child(tripId).get().addOnSuccessListener { snapshot ->
@@ -209,7 +236,7 @@ class TripRepositoryImpl @Inject constructor(
 
     override fun addExpense(expense: Expense): Flow<NetworkResult<Unit>> = callbackFlow {
         trySend(NetworkResult.Loading)
-        val expenseId = expensesRef.push().key ?: UUID.randomUUID().toString()
+        val expenseId = if (expense.id.isEmpty()) expensesRef.push().key ?: UUID.randomUUID().toString() else expense.id
         val finalExpense = expense.copy(id = expenseId)
         
         expensesRef.child(expenseId).setValue(finalExpense).addOnSuccessListener {
@@ -217,6 +244,30 @@ class TripRepositoryImpl @Inject constructor(
             close()
         }.addOnFailureListener { e ->
             trySend(NetworkResult.Error("Lỗi lưu chi tiêu: ${e.message}"))
+            close()
+        }
+        awaitClose()
+    }
+
+    override fun updateExpense(expense: Expense): Flow<NetworkResult<Unit>> = callbackFlow {
+        trySend(NetworkResult.Loading)
+        expensesRef.child(expense.id).setValue(expense).addOnSuccessListener {
+            trySend(NetworkResult.Success(Unit))
+            close()
+        }.addOnFailureListener { e ->
+            trySend(NetworkResult.Error("Lỗi cập nhật chi tiêu: ${e.message}"))
+            close()
+        }
+        awaitClose()
+    }
+
+    override fun deleteExpense(expenseId: String): Flow<NetworkResult<Unit>> = callbackFlow {
+        trySend(NetworkResult.Loading)
+        expensesRef.child(expenseId).removeValue().addOnSuccessListener {
+            trySend(NetworkResult.Success(Unit))
+            close()
+        }.addOnFailureListener { e ->
+            trySend(NetworkResult.Error("Lỗi xóa chi tiêu"))
             close()
         }
         awaitClose()
@@ -279,6 +330,24 @@ class TripRepositoryImpl @Inject constructor(
         tripsRef.child(tripId).child("galleryUrls").get().addOnSuccessListener { snapshot ->
             val currentUrls = snapshot.children.mapNotNull { it.getValue(String::class.java) }.toMutableList()
             currentUrls.add(photoUrl)
+            tripsRef.child(tripId).child("galleryUrls").setValue(currentUrls).addOnSuccessListener {
+                trySend(NetworkResult.Success(Unit))
+                close()
+            }.addOnFailureListener { e ->
+                trySend(NetworkResult.Error(e.message ?: "Error"))
+                close()
+            }
+        }.addOnFailureListener {
+            close()
+        }
+        awaitClose()
+    }
+
+    override fun deleteGalleryPhoto(tripId: String, photoUrl: String): Flow<NetworkResult<Unit>> = callbackFlow {
+        trySend(NetworkResult.Loading)
+        tripsRef.child(tripId).child("galleryUrls").get().addOnSuccessListener { snapshot ->
+            val currentUrls = snapshot.children.mapNotNull { it.getValue(String::class.java) }.toMutableList()
+            currentUrls.remove(photoUrl)
             tripsRef.child(tripId).child("galleryUrls").setValue(currentUrls).addOnSuccessListener {
                 trySend(NetworkResult.Success(Unit))
                 close()

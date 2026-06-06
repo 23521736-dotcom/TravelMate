@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import java.text.SimpleDateFormat
+import java.util.*
 
 data class AddExpenseUiState(
     val isLoading: Boolean = false,
@@ -29,7 +31,7 @@ class AddExpenseViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(AddExpenseUiState())
     val uiState: StateFlow<AddExpenseUiState> = _uiState.asStateFlow()
 
-    fun addExpense(tripId: String, amount: String, category: String, description: String, date: String) {
+    fun addExpense(tripId: String?, amount: String, category: String, description: String, dateStr: String) {
         val amountVal = amount.toDoubleOrNull()
         if (amountVal == null || amountVal <= 0) {
             _uiState.update { it.copy(error = "Số tiền phải là số lớn hơn 0") }
@@ -48,13 +50,20 @@ class AddExpenseViewModel @Inject constructor(
                 return@launch
             }
 
+            val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.US)
+            val dateMillis = try { 
+                sdf.parse(dateStr)?.time ?: System.currentTimeMillis() 
+            } catch(e: Exception) { 
+                System.currentTimeMillis() 
+            }
+
             val expense = Expense(
                 userId = userId,
-                tripId = tripId,
+                tripId = tripId ?: "global",
                 amount = amountVal,
                 category = category,
                 description = description,
-                date = System.currentTimeMillis() // Simplified
+                date = dateMillis
             )
 
             tripRepository.addExpense(expense).collect { result ->
