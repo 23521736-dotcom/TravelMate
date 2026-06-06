@@ -11,12 +11,28 @@ import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
+import io.github.jan.supabase.SupabaseClient
+import io.github.jan.supabase.createSupabaseClient
+import io.github.jan.supabase.postgrest.Postgrest
+import io.github.jan.supabase.storage.Storage
 import retrofit2.Retrofit
 import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
+
+    @Provides
+    @Singleton
+    fun provideSupabaseClient(): SupabaseClient {
+        return createSupabaseClient(
+            supabaseUrl = "https://rbugosbyvqdhlmxmucuz.supabase.co",
+            supabaseKey = "sb_publishable_vzFri5feKztHghCs5civhw_w_M0Fa3y"
+        ) {
+            install(Postgrest)
+            install(Storage)
+        }
+    }
 
     @Provides
     @Singleton

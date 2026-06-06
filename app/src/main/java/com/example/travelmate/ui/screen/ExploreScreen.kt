@@ -175,7 +175,7 @@ fun PopularDestinationCard(
     ) {
         Row(modifier = Modifier.padding(12.dp)) {
             AsyncImage(
-                model = destination.imageUrls.firstOrNull(),
+                model = destination.coverImage ?: destination.imageUrls.firstOrNull() ?: "https://images.unsplash.com/photo-1583417319070-4a69db38a482",
                 contentDescription = null,
                 modifier = Modifier
                     .size(100.dp)

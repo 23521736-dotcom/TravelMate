@@ -41,26 +41,40 @@ class HomeViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
+    private var destinationsJob: Job? = null
     private var tripsJob: Job? = null
+    private var expensesJob: Job? = null
+    private var notificationsJob: Job? = null
 
     init {
         refreshData()
     }
 
     fun refreshData() {
-        viewModelScope.launch {
+        if (destinationsJob?.isActive == true) return
+
+        android.util.Log.d("HomeVM", "Refreshing home data with real-time listeners...")
+        destinationsJob = viewModelScope.launch {
             val currentUser = authRepository.getCurrentUser()
             _uiState.update { it.copy(user = currentUser, isLoading = true) }
             
             destinationRepository.getRecommendedDestinations(6).collect { result ->
                 when (result) {
-                    is NetworkResult.Loading -> _uiState.update { it.copy(isLoading = true) }
+                    is NetworkResult.Loading -> {
+                        if (_uiState.value.recommendedDestinations.isEmpty()) {
+                            _uiState.update { it.copy(isLoading = true) }
+                        }
+                    }
                     is NetworkResult.Success -> {
+                        android.util.Log.d("HomeVM", "Recommended destinations updated: ${result.data.size}")
                         _uiState.update { it.copy(
                             isLoading = false,
                             recommendedDestinations = result.data
                         )}
-                        fetchUserTrips()
+                        // Khởi tạo các listener khác nếu chưa có
+                        if (tripsJob?.isActive != true) {
+                            fetchUserTrips()
+                        }
                     }
                     is NetworkResult.Error -> {
                         _uiState.update { it.copy(isLoading = false, error = result.message) }
@@ -71,53 +85,53 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun fetchUserTrips() {
-        viewModelScope.launch {
+        tripsJob = viewModelScope.launch {
             val user = authRepository.getCurrentUser() ?: return@launch
             
-            // Sử dụng combine hoặc zip nếu cần, nhưng ở đây ta tách ra để tránh lồng nhau gây rò rỉ bộ nhớ/crash
-            launch {
-                tripRepository.getUserTrips(user.uid).collect { result ->
-                    if (result is NetworkResult.Success) {
-                        val trips = result.data
-                        val ongoing = trips.find { it.status == com.example.travelmate.domain.model.Trip.STATUS_ONGOING }
-                            ?: trips.filter { it.status == com.example.travelmate.domain.model.Trip.STATUS_UPCOMING }
-                                .minByOrNull { it.startDate }
-                        
-                        val upcomingCount = trips.count { it.status == com.example.travelmate.domain.model.Trip.STATUS_UPCOMING }
-                        
-                        _uiState.update { it.copy(
-                            ongoingTrip = ongoing,
-                            totalTrips = trips.size,
-                            upcomingTrips = upcomingCount
-                        ) }
-                        
-                        checkUpcomingTrips(trips)
-                    }
+            tripRepository.getUserTrips(user.uid).collect { result ->
+                if (result is NetworkResult.Success) {
+                    val trips = result.data
+                    val ongoing = trips.find { it.status == com.example.travelmate.domain.model.Trip.STATUS_ONGOING }
+                        ?: trips.filter { it.status == com.example.travelmate.domain.model.Trip.STATUS_UPCOMING }
+                            .minByOrNull { it.startDate }
+                    
+                    val upcomingCount = trips.count { it.status == com.example.travelmate.domain.model.Trip.STATUS_UPCOMING }
+                    
+                    _uiState.update { it.copy(
+                        ongoingTrip = ongoing,
+                        totalTrips = trips.size,
+                        upcomingTrips = upcomingCount
+                    ) }
+                    
+                    checkUpcomingTrips(trips)
                 }
             }
+        }
 
-            launch {
-                tripRepository.getAllExpenses(user.uid).collect { expResult ->
-                    if (expResult is NetworkResult.Success) {
-                        val totalSpent = expResult.data.sumOf { exp ->
-                            val rate = when (exp.currency.uppercase()) {
-                                "USD" -> 25400.0
-                                "EUR" -> 27500.0
-                                "SGD" -> 18800.0
-                                "THB" -> 700.0
-                                else -> 1.0
-                            }
-                            exp.amount * rate
+        expensesJob = viewModelScope.launch {
+            val user = authRepository.getCurrentUser() ?: return@launch
+            tripRepository.getAllExpenses(user.uid).collect { expResult ->
+                if (expResult is NetworkResult.Success) {
+                    val totalSpent = expResult.data.sumOf { exp ->
+                        val rate = when (exp.currency.uppercase()) {
+                            "USD" -> 25400.0
+                            "EUR" -> 27500.0
+                            "SGD" -> 18800.0
+                            "THB" -> 700.0
+                            else -> 1.0
                         }
-                        _uiState.update { it.copy(totalSpent = totalSpent) }
+                        exp.amount * rate
                     }
+                    _uiState.update { it.copy(totalSpent = totalSpent) }
                 }
             }
         }
     }
 
     private fun checkUpcomingTrips(trips: List<com.example.travelmate.domain.model.Trip>) {
-        viewModelScope.launch {
+        if (notificationsJob?.isActive == true) return
+        
+        notificationsJob = viewModelScope.launch {
             val user = authRepository.getCurrentUser() ?: return@launch
             val now = System.currentTimeMillis()
 
@@ -159,6 +173,9 @@ class HomeViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
+        destinationsJob?.cancel()
         tripsJob?.cancel()
+        expensesJob?.cancel()
+        notificationsJob?.cancel()
     }
 }

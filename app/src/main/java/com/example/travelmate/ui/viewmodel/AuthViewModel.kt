@@ -53,13 +53,17 @@ class AuthViewModel @Inject constructor(
     private fun checkSession() {
         viewModelScope.launch {
             try {
+                android.util.Log.d("AuthViewModel", "Checking session...")
                 repository.getCurrentUser()?.let { user ->
+                    android.util.Log.d("AuthViewModel", "Session found for user: ${user.email}")
                     _uiState.update { it.copy(user = user, isCheckingSession = false) }
                     refreshUserProfile(user.uid)
                 } ?: run {
+                    android.util.Log.d("AuthViewModel", "No active session found")
                     _uiState.update { it.copy(isCheckingSession = false) }
                 }
             } catch (e: Exception) {
+                android.util.Log.e("AuthViewModel", "Error checking session", e)
                 _uiState.update { it.copy(isCheckingSession = false) }
             }
         }
@@ -116,8 +120,6 @@ class AuthViewModel @Inject constructor(
         val trimmedPassword = password.trim()
         val trimmedName = name.trim()
         
-        // ... (validation logic remains the same)
-
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             val result = signUpUseCase(trimmedEmail, trimmedPassword, trimmedName)
@@ -207,7 +209,7 @@ class AuthViewModel @Inject constructor(
         verificationPollingJob?.cancel()
         verificationPollingJob = viewModelScope.launch {
             while (true) {
-                delay(3000) // Poll every 3 seconds
+                delay(3000)
                 val result = repository.checkEmailVerificationStatus()
                 if (result is NetworkResult.Success && result.data == true) {
                     _uiState.update { it.copy(isSuccess = true, isAwaitingEmailVerification = false, error = "Xác thực email thành công! Bạn có thể đăng nhập ngay.") }
@@ -246,14 +248,37 @@ class AuthViewModel @Inject constructor(
         handle: String?,
         location: String?,
         bio: String?,
-        interests: List<Category>
+        interests: List<Category>,
+        photoBytes: ByteArray? = null
     ) {
         viewModelScope.launch {
-            repository.updateProfile(name, handle, location, bio, interests, null).collect { result ->
+            android.util.Log.d("AuthViewModel", "Updating profile for user: $name")
+            _uiState.update { it.copy(isLoading = true, error = null, isSuccess = false) }
+            
+            var photoUrl: String? = _uiState.value.user?.photoUrl
+            if (photoBytes != null) {
+                val timestamp = System.currentTimeMillis()
+                val randomString = java.util.UUID.randomUUID().toString().take(6)
+                val fileName = "${timestamp}_$randomString.jpg"
+                val path = "users/$fileName"
+                repository.uploadImage(path, photoBytes).collect { result ->
+                    if (result is NetworkResult.Success) {
+                        photoUrl = result.data
+                    }
+                }
+            }
+
+            repository.updateProfile(name, handle, location, bio, interests, photoUrl).collect { result ->
                 when (result) {
                     is NetworkResult.Loading -> _uiState.update { it.copy(isLoading = true) }
-                    is NetworkResult.Success -> _uiState.update { it.copy(isLoading = false, user = result.data, isSuccess = true) }
-                    is NetworkResult.Error -> _uiState.update { it.copy(isLoading = false, error = result.message) }
+                    is NetworkResult.Success -> {
+                        android.util.Log.d("AuthViewModel", "Profile updated successfully for ${result.data.email}")
+                        _uiState.update { it.copy(isLoading = false, user = result.data, isSuccess = true) }
+                    }
+                    is NetworkResult.Error -> {
+                        android.util.Log.e("AuthViewModel", "Profile update failed: ${result.message}")
+                        _uiState.update { it.copy(isLoading = false, error = result.message) }
+                    }
                 }
             }
         }
@@ -268,7 +293,6 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             repository.toggleWishlist(destinationId).collect { result ->
                 if (result is NetworkResult.Success) {
-                    // Update user in UI state
                     val currentUser = repository.getCurrentUser()
                     _uiState.update { it.copy(user = currentUser) }
                 }
@@ -309,8 +333,17 @@ class AuthViewModel @Inject constructor(
 
     fun resetState() {
         viewModelScope.launch {
+            android.util.Log.d("AuthViewModel", "Resetting state...")
             val currentUser = repository.getCurrentUser()
-            _uiState.update { AuthUiState(user = currentUser, isSuccess = false, error = null, isLoading = false) }
+            _uiState.update { 
+                AuthUiState(
+                    user = currentUser, 
+                    isSuccess = false, 
+                    error = null, 
+                    isLoading = false,
+                    isCheckingSession = false
+                ) 
+            }
         }
     }
 

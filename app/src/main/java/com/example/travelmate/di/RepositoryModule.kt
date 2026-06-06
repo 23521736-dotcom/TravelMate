@@ -5,11 +5,13 @@ import com.example.travelmate.data.repository.NotificationRepositoryImpl
 import com.example.travelmate.data.repository.TripRepositoryImpl
 import com.example.travelmate.data.repository.ChatRepositoryImpl
 import com.example.travelmate.data.repository.BudgetRepositoryImpl
+import com.example.travelmate.data.repository.ReviewRepositoryImpl
 import com.example.travelmate.domain.repository.DestinationRepository
 import com.example.travelmate.domain.repository.NotificationRepository
 import com.example.travelmate.domain.repository.TripRepository
 import com.example.travelmate.domain.repository.ChatRepository
 import com.example.travelmate.domain.repository.BudgetRepository
+import com.example.travelmate.domain.repository.ReviewRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -49,4 +51,10 @@ abstract class RepositoryModule {
     abstract fun bindBudgetRepository(
         budgetRepositoryImpl: BudgetRepositoryImpl
     ): BudgetRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindReviewRepository(
+        reviewRepositoryImpl: ReviewRepositoryImpl
+    ): ReviewRepository
 }

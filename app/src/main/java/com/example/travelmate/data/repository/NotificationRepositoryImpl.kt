@@ -20,24 +20,32 @@ class NotificationRepositoryImpl @Inject constructor(
     private val notifRef = database.getReference("notifications")
 
     override fun getUserNotifications(userId: String): Flow<NetworkResult<List<Notification>>> = callbackFlow {
+        android.util.Log.d("NotifRepo", "Fetching notifications for user: $userId")
         trySend(NetworkResult.Loading)
         val listener = notifRef.child(userId).addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 try {
                     val list = mutableListOf<Notification>()
-                    snapshot.children.forEach { child ->
-                        try {
-                            child.getValue(Notification::class.java)?.let { list.add(it) }
-                        } catch (e: Exception) {
-                            android.util.Log.e("NotifRepo", "Error mapping: ${e.message}")
+                    if (snapshot.exists()) {
+                        snapshot.children.forEach { child ->
+                            try {
+                                child.getValue(Notification::class.java)?.let { list.add(it) }
+                            } catch (e: Exception) {
+                                android.util.Log.e("NotifRepo", "Error mapping notification: ${e.message}")
+                            }
                         }
+                    } else {
+                        android.util.Log.d("NotifRepo", "No notifications found for user $userId")
                     }
+                    android.util.Log.d("NotifRepo", "Successfully fetched ${list.size} notifications")
                     trySend(NetworkResult.Success(list.sortedByDescending { it.timestamp }))
                 } catch (e: Exception) {
+                    android.util.Log.e("NotifRepo", "Error syncing notifications", e)
                     trySend(NetworkResult.Error("Lỗi đồng bộ thông báo"))
                 }
             }
             override fun onCancelled(error: DatabaseError) {
+                android.util.Log.e("NotifRepo", "Database error: ${error.message}")
                 trySend(NetworkResult.Error(error.message))
             }
         })

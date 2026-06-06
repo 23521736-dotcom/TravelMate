@@ -81,7 +81,7 @@ fun MainContainer(
                 shape = androidx.compose.foundation.shape.CircleShape
             ) {
                 Icon(
-                    if (isChatVisible) Icons.Default.Close else Icons.AutoMirrored.Filled.Chat,
+                    if (isChatVisible) Icons.Default.Close else Icons.Default.AutoAwesome,
                     contentDescription = "AI Chat"
                 )
             }

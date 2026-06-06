@@ -11,7 +11,8 @@
       "totalTrips": 5,
       "totalSpent": 23000000.0,
       "upcomingTrips": 2,
-      "interests": ["BEACH", "CULTURE", "FOOD", "PHOTOGRAPHY", "BUDGET"]
+      "interests": ["BEACH", "CULTURE", "FOOD", "PHOTOGRAPHY", "BUDGET"],
+      "wishlistIds": ["landmark_02", "landmark_05", "landmark_07"]
     }
   },
   "notifications": {
@@ -20,20 +21,87 @@
         "id": "notif_01",
         "userId": "alex_at_travelmate_com",
         "title": "Welcome to TravelMate! 🎉",
-        "message": "Start planning your first trip and explore amazing destinations.",
+        "message": "Bắt đầu lập kế hoạch cho chuyến đi đầu tiên của bạn và khám phá những địa điểm tuyệt vời.",
         "type": "welcome",
-        "timestamp": 1771459200000,
-        "isRead": false
+        "timestamp": 1740326400000,
+        "isRead": true
       },
       "notif_02": {
         "id": "notif_02",
         "userId": "alex_at_travelmate_com",
-        "title": "Trip starts in 3 days!",
-        "message": "Your Da Lat Adventure begins on March 15th. Don't forget to pack!",
+        "title": "Chuyến đi sắp bắt đầu!",
+        "message": "Chuyến đi Đà Lạt của bạn sẽ khởi hành sau 3 ngày nữa. Đừng quên chuẩn bị hành lý nhé!",
         "type": "trip_start",
-        "timestamp": 1771372800000,
-        "isRead": false
+        "timestamp": 1740412800000,
+        "isRead": false,
+        "tripId": "trip_01"
       }
+    }
+  },
+  "trips": {
+    "trip_01": {
+      "id": "trip_01",
+      "userId": "alex_at_travelmate_com",
+      "name": "Khám phá Đà Lạt mộng mơ",
+      "destination": "Đà Lạt, Lâm Đồng",
+      "destinationId": "landmark_13",
+      "description": "Chuyến đi nghỉ dưỡng 3 ngày tại thành phố ngàn hoa.",
+      "startDate": 1742054400000,
+      "endDate": 1742313600000,
+      "durationDays": 3,
+      "budgetAmount": 5000000.0,
+      "budgetLevel": "Mid-range",
+      "currency": "VND",
+      "status": "upcoming",
+      "coverImageUrl": "https://images.unsplash.com/photo-1589308078059-be1415eab4c3",
+      "galleryUrls": [],
+      "itinerary": [
+        {
+          "dayNumber": 1,
+          "date": 1742054400000,
+          "activities": [
+            {
+              "id": "act_01",
+              "time": "08:00 AM",
+              "title": "Bay đến Liên Khương",
+              "location": "Sân bay Liên Khương",
+              "type": "Transport",
+              "isDone": false
+            },
+            {
+              "id": "act_02",
+              "time": "12:00 PM",
+              "title": "Ăn trưa Bánh Căn",
+              "location": "Bánh Căn Lệ",
+              "type": "Food",
+              "isDone": false
+            }
+          ]
+        }
+      ],
+      "createdAt": 1740326400000
+    }
+  },
+  "expenses": {
+    "exp_01": {
+      "id": "exp_01",
+      "userId": "alex_at_travelmate_com",
+      "tripId": "trip_01",
+      "amount": 1200000.0,
+      "currency": "VND",
+      "category": "Transport",
+      "description": "Vé máy bay khứ hồi",
+      "date": 1740326400000
+    },
+    "exp_02": {
+      "id": "exp_02",
+      "userId": "alex_at_travelmate_com",
+      "tripId": "trip_01",
+      "amount": 500000.0,
+      "currency": "VND",
+      "category": "Stay",
+      "description": "Đặt cọc Homestay",
+      "date": 1740326400000
     }
   },
   "destinations": {

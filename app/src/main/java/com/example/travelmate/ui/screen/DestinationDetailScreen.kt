@@ -3,7 +3,10 @@ package com.example.travelmate.ui.screen
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -26,14 +29,18 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.example.travelmate.ui.theme.*
 import com.example.travelmate.ui.viewmodel.DestinationDetailViewModel
+import com.example.travelmate.domain.model.Review
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun DestinationDetailScreen(
     destinationId: String,
     onBackClick: () -> Unit,
     onPlanTripClick: () -> Unit,
+    onWriteReviewClick: (String) -> Unit,
     viewModel: DestinationDetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -96,7 +103,7 @@ fun DestinationDetailScreen(
                     // Image Header
                     Box(modifier = Modifier.fillMaxWidth().height(300.dp)) {
                         AsyncImage(
-                            model = destination.imageUrls.firstOrNull() ?: "https://images.unsplash.com/photo-1583417319070-4a69db38a482",
+                            model = destination.coverImage ?: destination.imageUrls.firstOrNull() ?: "https://images.unsplash.com/photo-1583417319070-4a69db38a482",
                             contentDescription = null,
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
@@ -222,7 +229,165 @@ fun DestinationDetailScreen(
                             Text(text = "Xem trên bản đồ", fontWeight = FontWeight.Bold)
                         }
 
+                        Spacer(modifier = Modifier.height(32.dp))
+
+                        // Reviews Summary
+                        if (uiState.reviews.isNotEmpty()) {
+                            ReviewSummary(reviews = uiState.reviews)
+                            Spacer(modifier = Modifier.height(24.dp))
+                        }
+
+                        // Reviews List Section
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(text = "Đánh giá (${uiState.reviews.size})", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                            TextButton(onClick = { onWriteReviewClick(destinationId) }) {
+                                Text(text = "Viết đánh giá", color = BluePrimary, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        if (uiState.reviews.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(text = "Chưa có đánh giá nào. Hãy là người đầu tiên!", color = GrayText, fontSize = 14.sp)
+                            }
+                        } else {
+                            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                uiState.reviews.forEach { review ->
+                                    ReviewItem(review = review)
+                                }
+                            }
+                        }
+
                         Spacer(modifier = Modifier.height(80.dp)) // Extra space for bottom bar
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ReviewSummary(reviews: List<Review>) {
+    val avgRating = reviews.map { it.rating }.average().toFloat()
+    val count = reviews.size
+    
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = Color.Black.copy(alpha = 0.8f),
+        shape = RoundedCornerShape(24.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = String.format(Locale.US, "%.1f", if (avgRating.isNaN()) 0f else avgRating),
+                fontSize = 48.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = BluePrimary
+            )
+            
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                (1..5).forEach { index ->
+                    Icon(
+                        imageVector = Icons.Default.Star,
+                        contentDescription = null,
+                        tint = if (index <= avgRating) Color(0xFFFBC02D) else Color.White.copy(alpha = 0.3f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(text = "$count VERIFIED REVIEWS", color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Bars
+            val distribution = (1..5).map { star -> 
+                reviews.count { it.rating.toInt() == star }.toFloat() / count 
+            }.reversed()
+            
+            distribution.forEachIndexed { index, percent ->
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
+                    Text(text = "${5 - index}", color = Color.White, fontSize = 12.sp, modifier = Modifier.width(12.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    LinearProgressIndicator(
+                        progress = { percent },
+                        modifier = Modifier.weight(1f).height(6.dp).clip(CircleShape),
+                        color = BluePrimary,
+                        trackColor = Color.White.copy(alpha = 0.1f)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(text = "${(percent * 100).toInt()}%", color = Color.White, fontSize = 10.sp, modifier = Modifier.width(24.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ReviewItem(review: Review) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, GrayBorder.copy(alpha = 0.3f))
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AsyncImage(
+                    model = review.userPhotoUrl ?: "https://ui-avatars.com/api/?name=${review.userName}",
+                    contentDescription = null,
+                    modifier = Modifier.size(40.dp).clip(CircleShape),
+                    contentScale = ContentScale.Crop
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = review.userName, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    val dateStr = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(review.createdAt))
+                    Text(text = dateStr, color = GrayText, fontSize = 11.sp)
+                }
+                Surface(
+                    color = Color(0xFFFBC02D).copy(alpha = 0.1f),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFFBC02D), modifier = Modifier.size(12.dp))
+                        Text(text = " ${review.rating.toInt()}", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFFFBC02D))
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            Text(
+                text = review.comment,
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+            )
+            
+            if (review.imageUrls.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(review.imageUrls) { url ->
+                        AsyncImage(
+                            model = url,
+                            contentDescription = null,
+                            modifier = Modifier.size(80.dp).clip(RoundedCornerShape(8.dp)),
+                            contentScale = ContentScale.Crop
+                        )
                     }
                 }
             }
@@ -263,18 +428,4 @@ fun InfoBox(modifier: Modifier, icon: androidx.compose.ui.graphics.vector.ImageV
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-fun FlowRow(
-    modifier: Modifier = Modifier,
-    horizontalArrangement: Arrangement.Horizontal = Arrangement.Start,
-    verticalArrangement: Arrangement.Vertical = Arrangement.Top,
-    content: @Composable FlowRowScope.() -> Unit
-) {
-    androidx.compose.foundation.layout.FlowRow(
-        modifier = modifier,
-        horizontalArrangement = horizontalArrangement,
-        verticalArrangement = verticalArrangement,
-        content = content
-    )
-}
+

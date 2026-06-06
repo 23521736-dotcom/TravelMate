@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
 import com.example.travelmate.domain.model.Category
 import com.example.travelmate.ui.theme.*
 import com.example.travelmate.ui.viewmodel.AuthViewModel
@@ -75,12 +76,21 @@ fun ProfileScreen(
                         .border(2.dp, Color.White, RoundedCornerShape(24.dp)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = user?.fullName?.firstOrNull()?.toString() ?: "U",
-                        fontSize = 40.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
+                    if (user?.photoUrl != null) {
+                        AsyncImage(
+                            model = user.photoUrl,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                        )
+                    } else {
+                        Text(
+                            text = user?.fullName?.firstOrNull()?.toString() ?: "U",
+                            fontSize = 40.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
                     // Small edit icon on the image
                     Box(
                         modifier = Modifier

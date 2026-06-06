@@ -11,6 +11,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.Json
@@ -36,96 +37,152 @@ class DestinationRepositoryImpl @Inject constructor(
             child.getValue(String::class.java)?.let { imageUrls.add(it) }
         }
 
+        // Safer number conversion
+        fun safeDouble(snap: DataSnapshot): Double {
+            return when (val v = snap.value) {
+                is Number -> v.toDouble()
+                is String -> v.toDoubleOrNull() ?: 0.0
+                else -> 0.0
+            }
+        }
+
+        fun safeInt(snap: DataSnapshot): Int {
+            return when (val v = snap.value) {
+                is Number -> v.toInt()
+                is String -> v.toIntOrNull() ?: 0
+                else -> 0
+            }
+        }
+
+        fun safeBoolean(snap: DataSnapshot, default: Boolean = false): Boolean {
+            return when (val v = snap.value) {
+                is Boolean -> v
+                is String -> v.toBoolean()
+                else -> default
+            }
+        }
+
         return Destination(
             id = snapshot.child("id").getValue(String::class.java) ?: snapshot.key ?: "",
             name = snapshot.child("name").getValue(String::class.java) ?: "",
             location = snapshot.child("location").getValue(String::class.java) ?: "",
             country = snapshot.child("country").getValue(String::class.java) ?: "",
             description = snapshot.child("description").getValue(String::class.java) ?: "",
-            rating = snapshot.child("rating").getValue(Number::class.java)?.toDouble() ?: 0.0,
-            reviewCount = snapshot.child("reviewCount").getValue(Number::class.java)?.toInt() ?: 0,
+            rating = safeDouble(snapshot.child("rating")),
+            reviewCount = safeInt(snapshot.child("reviewCount")),
             categoryTags = categoryTags,
             imageUrls = imageUrls,
-            unesco = snapshot.child("isUnesco").getValue(Boolean::class.java) 
-                ?: snapshot.child("unesco").getValue(Boolean::class.java) ?: false,
-            priceLevel = snapshot.child("priceLevel").getValue(Number::class.java)?.toInt() ?: 2,
-            latitude = snapshot.child("latitude").getValue(Number::class.java)?.toDouble() ?: 0.0,
-            longitude = snapshot.child("longitude").getValue(Number::class.java)?.toDouble() ?: 0.0,
-            promoted = snapshot.child("isPromoted").getValue(Boolean::class.java)
-                ?: snapshot.child("promoted").getValue(Boolean::class.java) ?: false,
-            avgPricePerDay = snapshot.child("avgPricePerDay").getValue(Number::class.java)?.toDouble() ?: 0.0
+            coverImage = snapshot.child("coverImage").getValue(String::class.java),
+            unesco = safeBoolean(snapshot.child("isUnesco")) || safeBoolean(snapshot.child("unesco")),
+            priceLevel = safeInt(snapshot.child("priceLevel")),
+            latitude = safeDouble(snapshot.child("latitude")),
+            longitude = safeDouble(snapshot.child("longitude")),
+            promoted = safeBoolean(snapshot.child("isPromoted")) || safeBoolean(snapshot.child("promoted")),
+            avgPricePerDay = safeDouble(snapshot.child("avgPricePerDay"))
         )
     }
 
     override fun getDestinations(): Flow<NetworkResult<List<Destination>>> = callbackFlow {
+        android.util.Log.d("DestRepository", "Listening to all destinations changes...")
         trySend(NetworkResult.Loading)
-        destinationsRef.get().addOnSuccessListener { snapshot ->
-            try {
-                val list = mutableListOf<Destination>()
-                snapshot.children.forEach { child ->
-                    list.add(mapSnapshotToDestination(child))
+        
+        val listener = destinationsRef.addValueEventListener(object : com.google.firebase.database.ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                try {
+                    val list = mutableListOf<Destination>()
+                    if (snapshot.exists()) {
+                        android.util.Log.d("DestRepository", "Data changed, found ${snapshot.childrenCount} destinations")
+                        snapshot.children.forEach { child ->
+                            list.add(mapSnapshotToDestination(child))
+                        }
+                    } else {
+                        android.util.Log.w("DestRepository", "No destinations found in database")
+                    }
+                    trySend(NetworkResult.Success(list))
+                } catch (e: Exception) {
+                    android.util.Log.e("DestRepository", "Error mapping destinations", e)
+                    trySend(NetworkResult.Error("Lỗi xử lý dữ liệu: ${e.message}"))
                 }
-                trySend(NetworkResult.Success(list))
-            } catch (e: Exception) {
-                trySend(NetworkResult.Error("Lỗi xử lý dữ liệu: ${e.message}"))
             }
-            close()
-        }.addOnFailureListener { e ->
-            trySend(NetworkResult.Error(e.message ?: "Failed to fetch destinations"))
-            close()
-        }
-        awaitClose()
+
+            override fun onCancelled(error: com.google.firebase.database.DatabaseError) {
+                android.util.Log.e("DestRepository", "Database error: ${error.message}")
+                trySend(NetworkResult.Error(error.message))
+            }
+        })
+        
+        awaitClose { destinationsRef.removeEventListener(listener) }
     }
 
     override fun getDestinationById(id: String): Flow<NetworkResult<Destination>> = callbackFlow {
+        android.util.Log.d("DestRepository", "Listening to destination changes for ID: $id")
         trySend(NetworkResult.Loading)
-        destinationsRef.child(id).get().addOnSuccessListener { snapshot ->
-            try {
-                if (snapshot.exists()) {
-                    trySend(NetworkResult.Success(mapSnapshotToDestination(snapshot)))
-                } else {
-                    trySend(NetworkResult.Error("Destination not found"))
+        
+        val listener = destinationsRef.child(id).addValueEventListener(object : com.google.firebase.database.ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                try {
+                    if (snapshot.exists()) {
+                        android.util.Log.d("DestRepository", "Destination updated: ${snapshot.child("name").value}")
+                        trySend(NetworkResult.Success(mapSnapshotToDestination(snapshot)))
+                    } else {
+                        android.util.Log.w("DestRepository", "Destination with ID $id not found")
+                        trySend(NetworkResult.Error("Destination not found"))
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("DestRepository", "Error mapping destination $id", e)
+                    trySend(NetworkResult.Error("Lỗi dữ liệu: ${e.message}"))
                 }
-            } catch (e: Exception) {
-                trySend(NetworkResult.Error("Lỗi dữ liệu: ${e.message}"))
             }
-            close()
-        }.addOnFailureListener { e ->
-            trySend(NetworkResult.Error(e.message ?: "Error"))
-            close()
-        }
-        awaitClose()
+
+            override fun onCancelled(error: com.google.firebase.database.DatabaseError) {
+                android.util.Log.e("DestRepository", "Database error for $id: ${error.message}")
+                trySend(NetworkResult.Error(error.message))
+            }
+        })
+        
+        awaitClose { destinationsRef.child(id).removeEventListener(listener) }
     }
 
     override fun getRecommendedDestinations(limit: Int): Flow<NetworkResult<List<Destination>>> = callbackFlow {
+        android.util.Log.d("DestRepository", "Listening to recommended destinations...")
         trySend(NetworkResult.Loading)
-        val user = authRepository.getCurrentUser()
-        val userInterests = user?.interests ?: emptyList()
-
-        destinationsRef.get().addOnSuccessListener { snapshot ->
-            try {
-                val list = mutableListOf<Destination>()
-                snapshot.children.forEach { child ->
-                    val dest = mapSnapshotToDestination(child)
-                    if (userInterests.isEmpty() || dest.categories.any { it in userInterests }) {
-                        list.add(dest)
+        
+        val listener = destinationsRef.addValueEventListener(object : com.google.firebase.database.ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                launch {
+                    try {
+                        val user = authRepository.getCurrentUser()
+                        val userInterests = user?.interests ?: emptyList()
+                        
+                        val list = mutableListOf<Destination>()
+                        if (snapshot.exists()) {
+                            snapshot.children.forEach { child ->
+                                val dest = mapSnapshotToDestination(child)
+                                if (userInterests.isEmpty() || dest.categories.any { it in userInterests }) {
+                                    list.add(dest)
+                                }
+                            }
+                        }
+                        
+                        val result = list.sortedByDescending { dest -> 
+                            dest.categories.count { it in userInterests }
+                        }.take(limit)
+                        
+                        trySend(NetworkResult.Success(result))
+                    } catch (e: Exception) {
+                        android.util.Log.e("DestRepository", "Error in recommended destinations", e)
+                        trySend(NetworkResult.Error("Lỗi gợi ý: ${e.message}"))
                     }
                 }
-                
-                val result = list.sortedByDescending { dest -> 
-                    dest.categories.count { it in userInterests }
-                }.take(limit)
-                
-                trySend(NetworkResult.Success(result))
-            } catch (e: Exception) {
-                trySend(NetworkResult.Error("Lỗi gợi ý: ${e.message}"))
             }
-            close()
-        }.addOnFailureListener { e ->
-            trySend(NetworkResult.Error(e.message ?: "Error"))
-            close()
-        }
-        awaitClose()
+
+            override fun onCancelled(error: com.google.firebase.database.DatabaseError) {
+                android.util.Log.e("DestRepository", "Recommended destinations cancelled: ${error.message}")
+                trySend(NetworkResult.Error(error.message))
+            }
+        })
+        
+        awaitClose { destinationsRef.removeEventListener(listener) }
     }
 
     override fun seedDatabase(): Flow<NetworkResult<Unit>> = callbackFlow {
@@ -145,7 +202,6 @@ class DestinationRepositoryImpl @Inject constructor(
             val total = destinationsJson.size
             var count = 0
             
-            // Xóa dữ liệu cũ trước khi nạp mới để đảm bảo sạch sẽ
             destinationsRef.removeValue().addOnCompleteListener {
                 destinationsJson.forEach { (key, value) ->
                     try {

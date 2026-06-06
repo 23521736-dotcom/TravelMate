@@ -1,5 +1,6 @@
 package com.example.travelmate.data.repository
 
+import com.example.travelmate.data.remote.SupabaseService
 import com.example.travelmate.domain.model.Expense
 import com.example.travelmate.domain.model.ItineraryDay
 import com.example.travelmate.domain.model.Trip
@@ -10,31 +11,34 @@ import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
-import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
 
 class TripRepositoryImpl @Inject constructor(
     private val database: FirebaseDatabase,
-    private val storage: FirebaseStorage
+    private val supabaseService: SupabaseService
 ) : TripRepository {
 
     private val tripsRef = database.getReference("trips")
     private val expensesRef = database.getReference("expenses")
 
     override fun createTrip(trip: Trip): Flow<NetworkResult<String>> = callbackFlow {
+        android.util.Log.d("TripRepo", "Creating trip for destination: ${trip.destination}")
         trySend(NetworkResult.Loading)
         
         val tripId = if (trip.id.isEmpty()) tripsRef.push().key ?: UUID.randomUUID().toString() else trip.id
         val finalTrip = trip.copy(id = tripId)
         
         tripsRef.child(tripId).setValue(finalTrip).addOnSuccessListener {
+            android.util.Log.d("TripRepo", "Trip created successfully with ID: $tripId")
             trySend(NetworkResult.Success(tripId))
             close()
         }.addOnFailureListener { e ->
+            android.util.Log.e("TripRepo", "Failed to create trip", e)
             trySend(NetworkResult.Error("Lỗi tạo chuyến đi: ${e.message}"))
             close()
         }
@@ -42,6 +46,7 @@ class TripRepositoryImpl @Inject constructor(
     }
 
     override fun getUserTrips(userId: String): Flow<NetworkResult<List<Trip>>> = callbackFlow {
+        android.util.Log.d("TripRepo", "Fetching trips for user: $userId")
         trySend(NetworkResult.Loading)
         
         val listener = tripsRef.addValueEventListener(object : ValueEventListener {
@@ -60,13 +65,16 @@ class TripRepositoryImpl @Inject constructor(
                             android.util.Log.e("TripRepo", "Lỗi nạp chuyến đi: ${e.message}")
                         }
                     }
+                    android.util.Log.d("TripRepo", "Found ${list.size} trips for user $userId")
                     trySend(NetworkResult.Success(list.sortedByDescending { it.createdAt }))
                 } catch (e: Exception) {
+                    android.util.Log.e("TripRepo", "Error syncing user trips", e)
                     trySend(NetworkResult.Error("Lỗi đồng bộ danh sách chuyến đi"))
                 }
             }
 
             override fun onCancelled(error: DatabaseError) {
+                android.util.Log.e("TripRepo", "Database error: ${error.message}")
                 trySend(NetworkResult.Error(error.message))
             }
         })
@@ -286,18 +294,16 @@ class TripRepositoryImpl @Inject constructor(
 
     override fun uploadImage(path: String, byteArray: ByteArray): Flow<NetworkResult<String>> = callbackFlow {
         trySend(NetworkResult.Loading)
-        val storageRef = storage.reference.child(path)
-        storageRef.putBytes(byteArray)
-            .addOnSuccessListener {
-                storageRef.downloadUrl.addOnSuccessListener { uri ->
-                    trySend(NetworkResult.Success(uri.toString()))
-                    close()
-                }.addOnFailureListener { close() }
-            }
-            .addOnFailureListener { e ->
+        launch {
+            try {
+                val url = supabaseService.uploadImage(path, byteArray)
+                trySend(NetworkResult.Success(url))
+            } catch (e: Exception) {
                 trySend(NetworkResult.Error(e.message ?: "Upload failed"))
+            } finally {
                 close()
             }
+        }
         awaitClose()
     }
 }

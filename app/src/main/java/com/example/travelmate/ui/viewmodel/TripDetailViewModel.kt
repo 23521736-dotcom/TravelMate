@@ -43,6 +43,7 @@ class TripDetailViewModel @Inject constructor(
         // Tránh tạo nhiều listener trùng lặp
         if (tripJob?.isActive == true) return
         
+        android.util.Log.d("TripDetailVM", "Fetching trip details for: $id")
         tripJob = viewModelScope.launch {
             tripRepository.getTripById(id).collect { result ->
                 when (result) {
@@ -52,13 +53,17 @@ class TripDetailViewModel @Inject constructor(
                         }
                     }
                     is NetworkResult.Success -> {
+                        android.util.Log.d("TripDetailVM", "Successfully fetched trip: ${result.data.name}")
                         _uiState.update { it.copy(isLoading = false, trip = result.data, error = null) }
                         // Chỉ khởi tạo listener chi tiêu MỘT LẦN duy nhất khi chưa có expensesJob
                         if (expensesJob?.isActive != true) {
                             fetchExpenses(id)
                         }
                     }
-                    is NetworkResult.Error -> _uiState.update { it.copy(isLoading = false, error = result.message) }
+                    is NetworkResult.Error -> {
+                        android.util.Log.e("TripDetailVM", "Error fetching trip: ${result.message}")
+                        _uiState.update { it.copy(isLoading = false, error = result.message) }
+                    }
                 }
             }
         }

@@ -2,6 +2,7 @@ package com.example.travelmate.data.repository
 
 import com.example.travelmate.data.local.PreferenceDataStore
 import com.example.travelmate.data.remote.EmailService
+import com.example.travelmate.data.remote.SupabaseService
 import com.example.travelmate.domain.model.Category
 import com.example.travelmate.domain.model.User
 import com.example.travelmate.domain.repository.AuthRepository
@@ -30,6 +31,7 @@ class AuthRepositoryImpl @Inject constructor(
     private val database: FirebaseDatabase,
     private val preferenceDataStore: PreferenceDataStore,
     private val emailService: EmailService,
+    private val supabaseService: SupabaseService,
     private val json: Json,
     @ApplicationContext private val context: Context
 ) : AuthRepository {
@@ -44,6 +46,8 @@ class AuthRepositoryImpl @Inject constructor(
         val trimmedEmail = email.trim()
         val trimmedPassword = password.trim()
         
+        android.util.Log.d("AuthRepository", "Attempting login for: $trimmedEmail")
+        
         if (trimmedEmail.isEmpty() || trimmedPassword.isEmpty()) {
             return@withContext NetworkResult.Error("Vui lòng nhập đầy đủ email và mật khẩu")
         }
@@ -57,18 +61,18 @@ class AuthRepositoryImpl @Inject constructor(
                 
                 if (snapshot.exists()) {
                     val user = mapSnapshotToUser(snapshot, uid)
+                    android.util.Log.d("AuthRepository", "Login successful, user profile found in DB")
                     preferenceDataStore.saveUser(user)
                     NetworkResult.Success(user)
                 } else {
+                    android.util.Log.w("AuthRepository", "User authenticated but profile not found in DB for UID: $uid")
                     // Check if it's in registration_otps
                     val emailKey = trimmedEmail.replace(".", ",")
                     val regSnapshot = regOtpsRef.child(emailKey).get().await()
                     if (regSnapshot.exists()) {
                         NetworkResult.Error("Vui lòng xác thực mã OTP đã được gửi tới email của bạn.")
                     } else {
-                        // User exists in Firebase Auth but not in our DB and no OTP pending? 
-                        // This might happen if registration was interrupted.
-                        // We could allow them in and create a profile, or ask to verify email.
+                        android.util.Log.i("AuthRepository", "Creating basic profile for user: $uid")
                         val newUser = User(uid = uid, email = firebaseUser.email ?: trimmedEmail, fullName = "Traveler")
                         usersRef.child(uid).setValue(newUser).await()
                         preferenceDataStore.saveUser(newUser)
@@ -79,6 +83,7 @@ class AuthRepositoryImpl @Inject constructor(
                 NetworkResult.Error("Xác thực thất bại")
             }
         } catch (e: Exception) {
+            android.util.Log.e("AuthRepository", "Login exception", e)
             val errorMsg = when {
                 e.message?.contains("user-not-found") == true -> "Tài khoản không tồn tại"
                 e.message?.contains("wrong-password") == true -> "Mật khẩu không chính xác"
@@ -91,11 +96,16 @@ class AuthRepositoryImpl @Inject constructor(
     override fun getUserProfile(uid: String): Flow<NetworkResult<User>> = flow {
         emit(NetworkResult.Loading)
         try {
+            android.util.Log.d("AuthRepository", "Fetching profile for UID: $uid")
             val snapshot = usersRef.child(uid).get().await()
+            if (!snapshot.exists()) {
+                android.util.Log.w("AuthRepository", "Profile not found in DB for UID: $uid")
+            }
             val user = mapSnapshotToUser(snapshot, uid)
             preferenceDataStore.saveUser(user)
             emit(NetworkResult.Success(user))
         } catch (e: Exception) {
+            android.util.Log.e("AuthRepository", "Error fetching profile for $uid", e)
             emit(NetworkResult.Error("Lỗi đồng bộ dữ liệu: ${e.message}"))
         }
     }
@@ -114,18 +124,36 @@ class AuthRepositoryImpl @Inject constructor(
             }
         }
 
+        // Helper functions for safe type conversion
+        fun safeInt(snap: DataSnapshot): Int {
+            return when (val v = snap.value) {
+                is Number -> v.toInt()
+                is String -> v.toIntOrNull() ?: 0
+                else -> 0
+            }
+        }
+
+        fun safeDouble(snap: DataSnapshot): Double {
+            return when (val v = snap.value) {
+                is Number -> v.toDouble()
+                is String -> v.toDoubleOrNull() ?: 0.0
+                else -> 0.0
+            }
+        }
+
         return User(
             uid = uid,
             email = snapshot.child("email").getValue(String::class.java) ?: "",
             fullName = snapshot.child("fullName").getValue(String::class.java),
-            photoUrl = snapshot.child("photoUrl").getValue(String::class.java),
+            photoUrl = snapshot.child("photoUrl").getValue(String::class.java) ?: snapshot.child("photoURL").getValue(String::class.java),
             bio = snapshot.child("bio").getValue(String::class.java),
             location = snapshot.child("location").getValue(String::class.java),
             handle = snapshot.child("handle").getValue(String::class.java),
-            totalTrips = snapshot.child("totalTrips").getValue(Number::class.java)?.toInt() ?: 0,
-            totalSpent = snapshot.child("totalSpent").getValue(Number::class.java)?.toDouble() ?: 0.0,
-            upcomingTrips = snapshot.child("upcomingTrips").getValue(Number::class.java)?.toInt() ?: 0,
-            interests = interestsList
+            totalTrips = safeInt(snapshot.child("totalTrips")),
+            totalSpent = safeDouble(snapshot.child("totalSpent")),
+            upcomingTrips = safeInt(snapshot.child("upcomingTrips")),
+            interests = interestsList,
+            wishlistIds = snapshot.child("wishlistIds").children.mapNotNull { it.getValue(String::class.java) }
         )
     }
 
@@ -326,12 +354,14 @@ class AuthRepositoryImpl @Inject constructor(
     ): Flow<NetworkResult<User>> = flow {
         val uid = firebaseAuth.currentUser?.uid
         if (uid == null) {
+            android.util.Log.e("AuthRepository", "Update profile failed: User not logged in")
             emit(NetworkResult.Error("Chưa đăng nhập"))
             return@flow
         }
         
         emit(NetworkResult.Loading)
         try {
+            android.util.Log.d("AuthRepository", "Updating profile for UID: $uid")
             val updates = mutableMapOf<String, Any>(
                 "fullName" to name.trim(),
                 "handle" to (handle ?: ""),
@@ -345,8 +375,10 @@ class AuthRepositoryImpl @Inject constructor(
             val snapshot = usersRef.child(uid).get().await()
             val user = mapSnapshotToUser(snapshot, uid)
             preferenceDataStore.saveUser(user)
+            android.util.Log.d("AuthRepository", "Profile updated successfully in DB and local")
             emit(NetworkResult.Success(user))
         } catch (e: Exception) {
+            android.util.Log.e("AuthRepository", "Update profile exception", e)
             emit(NetworkResult.Error("Cập nhật thất bại: ${e.message}"))
         }
     }
@@ -458,6 +490,16 @@ class AuthRepositoryImpl @Inject constructor(
             emit(NetworkResult.Success(isAdded))
         } catch (e: Exception) {
             emit(NetworkResult.Error("Lỗi cập nhật yêu thích: ${e.message}"))
+        }
+    }
+
+    override fun uploadImage(path: String, byteArray: ByteArray): Flow<NetworkResult<String>> = flow {
+        emit(NetworkResult.Loading)
+        try {
+            val url = supabaseService.uploadImage(path, byteArray)
+            emit(NetworkResult.Success(url))
+        } catch (e: Exception) {
+            emit(NetworkResult.Error(e.message ?: "Upload failed"))
         }
     }
 }
