@@ -1,0 +1,798 @@
+package com.example.travelmate.ui.screen
+
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.EventNote
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
+import com.example.travelmate.domain.model.Expense
+import com.example.travelmate.domain.model.ItineraryDay
+import com.example.travelmate.domain.model.TripActivity
+import com.example.travelmate.ui.theme.*
+import com.example.travelmate.ui.viewmodel.TripDetailViewModel
+import java.text.SimpleDateFormat
+import java.util.*
+
+@Composable
+fun TripDetailScreen(
+    tripId: String,
+    onBackClick: () -> Unit,
+    onEditClick: () -> Unit,
+    onAddExpenseClick: () -> Unit,
+    onDeleteTripSuccess: () -> Unit,
+    viewModel: TripDetailViewModel = hiltViewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    val trip = uiState.trip
+    val context = LocalContext.current
+    
+    LaunchedEffect(tripId) {
+        viewModel.getTrip(tripId)
+    }
+
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var selectedTab by remember { mutableIntStateOf(0) }
+    val tabs = listOf("Overview", "Itinerary", "Expenses", "Photos")
+
+    // State to trigger Add Activity dialog from Overview
+    var autoOpenAddActivity by remember { mutableStateOf(false) }
+
+    if (showDeleteDialog) {
+        DeleteTripConfirmDialog(
+            tripName = trip?.name ?: "chuyến đi này",
+            onDismiss = { showDeleteDialog = false },
+            onConfirm = {
+                viewModel.deleteTrip(tripId, onDeleteTripSuccess)
+                showDeleteDialog = false
+            }
+        )
+    }
+
+    Scaffold(
+        modifier = Modifier.fillMaxSize()
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .background(MaterialTheme.colorScheme.background)
+        ) {
+            // Header Image
+            Box(modifier = Modifier.fillMaxWidth().height(220.dp)) {
+                AsyncImage(
+                    model = trip?.coverImageUrl.takeIf { it?.isNotEmpty() == true } ?: "https://images.unsplash.com/photo-1583417319070-4a69db38a482",
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.3f)))
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    IconButton(onClick = onBackClick, modifier = Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.2f))) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = Color.White)
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        val context = LocalContext.current
+                        HeaderIcon(icon = Icons.Default.Share, onClick = {
+                            val shareText = "Hãy xem kế hoạch chuyến đi của tôi: ${trip?.name}\n\n" +
+                                    "Điểm đến: ${trip?.destination}\n" +
+                                    "Thời gian: ${formatDateRange(trip?.startDate ?: 0, trip?.endDate ?: 0)}\n" +
+                                    "Ngân sách: ${String.format(Locale.US, "%,.0f %s", trip?.budgetAmount ?: 0.0, trip?.currency ?: "VND")}\n\n" +
+                                    "Chia sẻ từ ứng dụng TravelMate"
+                            
+                            val sendIntent: Intent = Intent().apply {
+                                action = Intent.ACTION_SEND
+                                putExtra(Intent.EXTRA_TEXT, shareText)
+                                type = "text/plain"
+                            }
+                            val shareIntent = Intent.createChooser(sendIntent, null)
+                            context.startActivity(shareIntent)
+                        })
+                        HeaderIcon(icon = Icons.Default.Edit, onClick = onEditClick)
+                        HeaderIcon(icon = Icons.Default.Delete, onClick = { 
+                            showDeleteDialog = true
+                        })
+                    }
+                }
+
+                Column(
+                    modifier = Modifier.align(Alignment.BottomStart).padding(20.dp)
+                ) {
+                    Surface(color = GreenPrimary, shape = RoundedCornerShape(8.dp)) {
+                        Text(text = trip?.status?.uppercase() ?: "UPCOMING", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
+                    }
+                    Text(text = trip?.name ?: "Loading...", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(14.dp))
+                        Text(text = " ${trip?.destination ?: ""} • ${trip?.durationDays ?: 0} ngày", color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
+                    }
+                }
+            }
+
+            // Tabs
+            TabRow(
+                selectedTabIndex = selectedTab,
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = BluePrimary,
+                indicator = { tabPositions ->
+                    TabRowDefaults.SecondaryIndicator(
+                        Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                        color = BluePrimary,
+                        height = 3.dp
+                    )
+                }
+            ) {
+                tabs.forEachIndexed { index, title ->
+                    Tab(
+                        selected = selectedTab == index,
+                        onClick = { selectedTab = index },
+                        text = { Text(text = title, fontSize = 14.sp, fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal) }
+                    )
+                }
+            }
+
+            // Content
+            Box(modifier = Modifier.fillMaxSize()) {
+                if (uiState.isLoading && trip == null) {
+                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center), color = BluePrimary)
+                } else {
+                    when (selectedTab) {
+                        0 -> OverviewTab(
+                            trip = trip,
+                            totalSpent = uiState.totalSpent,
+                            expenses = uiState.expenses,
+                            onAddExpense = { selectedTab = 2 },
+                            onAddActivity = { 
+                                selectedTab = 1
+                            }
+                        )
+                        1 -> {
+                            ItineraryTab(
+                                itinerary = trip?.itinerary ?: emptyList(),
+                                onAddActivity = { day, title, time, loc, type, note -> 
+                                    viewModel.addActivity(day, title, time, loc, type, note) 
+                                },
+                                onToggleDone = { day, id -> viewModel.toggleActivityDone(day, id) },
+                                onDeleteActivity = { day, id -> viewModel.deleteActivity(day, id) },
+                                initialShowAddDialog = autoOpenAddActivity,
+                                onDialogDismissed = { autoOpenAddActivity = false }
+                            )
+                        }
+                        2 -> ExpensesTabContentHighFidelity(
+                            trip = trip,
+                            totalSpent = uiState.totalSpent,
+                            expenses = uiState.expenses,
+                            onAddClick = { onAddExpenseClick() }
+                        )
+                        3 -> PhotosTab(
+                            urls = trip?.galleryUrls ?: emptyList(),
+                            onAddPhoto = { uriString ->
+                                val uri = android.net.Uri.parse(uriString)
+                                try {
+                                    val inputStream = context.contentResolver.openInputStream(uri)
+                                    val bytes = inputStream?.readBytes()
+                                    if (bytes != null) {
+                                        viewModel.addPhoto(bytes)
+                                    }
+                                    inputStream?.close()
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun OverviewTab(trip: com.example.travelmate.domain.model.Trip?, totalSpent: Double, expenses: List<Expense>, onAddExpense: () -> Unit, onAddActivity: () -> Unit) {
+    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
+        // Budget Overview Card
+        DetailCard {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(text = "Budget Overview", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+                Icon(Icons.Default.Payments, contentDescription = null, tint = OrangePrimary)
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
+                Column {
+                    Text(text = String.format(Locale.US, "%,.1fM đ", totalSpent / 1000000), fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Text(text = "spent", fontSize = 12.sp, color = GrayText)
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    val remaining = (trip?.budgetAmount ?: 0.0) - totalSpent
+                    Text(text = String.format(Locale.US, "%,.1fM đ", if (remaining > 0) remaining / 1000000 else 0.0), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = GreenPrimary)
+                    Text(text = "remaining", fontSize = 12.sp, color = GrayText)
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            val progress = if ((trip?.budgetAmount ?: 0.0) > 0) (totalSpent / trip!!.budgetAmount).toFloat().coerceIn(0f, 1f) else 0f
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
+                color = BluePrimary,
+                trackColor = GrayBackground
+            )
+            Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(text = "${(progress * 100).toInt()}% used", fontSize = 10.sp, color = GrayText)
+                Text(text = "Budget: ${String.format(Locale.US, "%,.1fM đ", (trip?.budgetAmount ?: 0.0) / 1000000)}", fontSize = 10.sp, color = GrayText)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Spending Breakdown
+        DetailCard {
+            Text(text = "Spending Breakdown", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+            Spacer(modifier = Modifier.height(20.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SpendingDonutChart(modifier = Modifier.size(100.dp), expenses = expenses)
+                Spacer(modifier = Modifier.width(24.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    BreakdownItem(color = OrangePrimary, label = "Accommodation")
+                    BreakdownItem(color = BluePrimary, label = "Food & Drinks")
+                    BreakdownItem(color = PurplePrimary, label = "Activities")
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Quick Actions
+        Text(text = "Quick Actions", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+        Spacer(modifier = Modifier.height(12.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            ActionBtn(modifier = Modifier.weight(1f), icon = Icons.Default.Paid, label = "Add Expense", color = OrangeLight, tint = OrangePrimary, onClick = onAddExpense)
+            ActionBtn(modifier = Modifier.weight(1f), icon = Icons.Default.AddLocationAlt, label = "Add Activity", color = GreenLight, tint = GreenPrimary, onClick = onAddActivity)
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+        Text(text = "About This Trip", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+        Text(text = trip?.description ?: "No description provided.", fontSize = 14.sp, color = GrayText, modifier = Modifier.padding(top = 8.dp))
+    }
+}
+
+@Composable
+fun ItineraryTab(
+    itinerary: List<ItineraryDay>, 
+    onAddActivity: (Int, String, String, String, String, String) -> Unit,
+    onToggleDone: (Int, String) -> Unit,
+    onDeleteActivity: (Int, String) -> Unit,
+    initialShowAddDialog: Boolean = false,
+    onDialogDismissed: () -> Unit = {}
+) {
+    var selectedDayIndex by remember { mutableIntStateOf(0) }
+    var showAddDialog by remember { mutableStateOf(initialShowAddDialog) }
+
+    LaunchedEffect(initialShowAddDialog) {
+        if (initialShowAddDialog) showAddDialog = true
+    }
+
+    if (showAddDialog) {
+        AddActivityDialog(
+            dayInfo = itinerary.getOrNull(selectedDayIndex)?.let { "Day ${it.dayNumber}" } ?: "",
+            onDismiss = { 
+                showAddDialog = false
+                onDialogDismissed()
+            },
+            onConfirm = { title, time, loc, type, note ->
+                onAddActivity(selectedDayIndex, title, time, loc, type, note)
+                showAddDialog = false
+                onDialogDismissed()
+            }
+        )
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        if (itinerary.isEmpty()) {
+            EmptyStateView(
+                icon = Icons.AutoMirrored.Filled.EventNote,
+                message = "Chưa có lịch trình cho chuyến đi này.",
+                actionText = "Tạo lịch trình",
+                onAction = { }
+            )
+        } else {
+            LazyRow(contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                itemsIndexed(itinerary) { index, day ->
+                    val calendar = Calendar.getInstance().apply { timeInMillis = day.date }
+                    val dayOfWeek = SimpleDateFormat("EEE", Locale.US).format(calendar.time).uppercase()
+                    val dayOfMonth = SimpleDateFormat("dd", Locale.US).format(calendar.time)
+                    
+                    Surface(
+                        modifier = Modifier.width(75.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (selectedDayIndex == index) BluePrimary else MaterialTheme.colorScheme.surface,
+                        border = if (selectedDayIndex != index) androidx.compose.foundation.BorderStroke(1.dp, GrayBorder.copy(alpha = 0.5f)) else null,
+                        onClick = { selectedDayIndex = index }
+                    ) {
+                        Column(modifier = Modifier.padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(text = dayOfWeek, fontSize = 10.sp, color = if (selectedDayIndex == index) Color.White else GrayText, fontWeight = FontWeight.Bold)
+                            Text(text = dayOfMonth, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = if (selectedDayIndex == index) Color.White else MaterialTheme.colorScheme.onSurface)
+                            Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(if (selectedDayIndex == index) Color.White else BluePrimary))
+                            Text(text = "Day ${day.dayNumber}", fontSize = 10.sp, color = if (selectedDayIndex == index) Color.White else GrayText, modifier = Modifier.padding(top = 4.dp))
+                        }
+                    }
+                }
+            }
+
+            itinerary.getOrNull(selectedDayIndex)?.let { currentDay ->
+                val dateStr = SimpleDateFormat("MMM dd, yyyy", Locale.US).format(Date(currentDay.date))
+                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Column {
+                        Text(text = dateStr, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurface)
+                        Text(text = "Day ${currentDay.dayNumber} • ${currentDay.activities.size} activities", fontSize = 12.sp, color = GrayText)
+                    }
+                    Button(onClick = { showAddDialog = true }, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = BluePrimary)) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
+                        Text(" Add", color = Color.White)
+                    }
+                }
+
+                if (currentDay.activities.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize().padding(top = 40.dp), contentAlignment = Alignment.TopCenter) {
+                        Text(text = "Chưa có hoạt động nào.", color = GrayText)
+                    }
+                } else {
+                    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp)) {
+                        items(currentDay.activities) { activity ->
+                            TimelineActivityItem(
+                                activity = activity,
+                                onToggleDone = { onToggleDone(selectedDayIndex, activity.id) },
+                                onDelete = { onDeleteActivity(selectedDayIndex, activity.id) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun TimelineActivityItem(activity: TripActivity, onToggleDone: () -> Unit, onDelete: () -> Unit) {
+    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(text = activity.time, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = GrayText)
+            Spacer(modifier = Modifier.height(4.dp))
+            IconButton(onClick = onToggleDone, modifier = Modifier.size(24.dp)) {
+                Icon(
+                    imageVector = if (activity.isDone) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked, 
+                    contentDescription = null, 
+                    tint = if (activity.isDone) GreenPrimary else GrayBorder, 
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            Box(modifier = Modifier.width(2.dp).height(50.dp).background(GrayBorder))
+        }
+        Spacer(modifier = Modifier.width(16.dp))
+        Surface(modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, GrayBorder.copy(alpha = 0.5f)), color = MaterialTheme.colorScheme.surface) {
+            Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Surface(color = MaterialTheme.colorScheme.background, shape = RoundedCornerShape(10.dp), modifier = Modifier.size(44.dp)) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = when(activity.type) {
+                                "Transport" -> Icons.Default.DirectionsCar
+                                "Food" -> Icons.Default.Restaurant
+                                "Stay" -> Icons.Default.Hotel
+                                "Shopping" -> Icons.Default.ShoppingBag
+                                "Leisure" -> Icons.Default.BeachAccess
+                                "Sightseeing" -> Icons.Default.Museum
+                                else -> Icons.Default.Map
+                            },
+                            contentDescription = null,
+                            tint = BluePrimary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = activity.title, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface)
+                    Text(text = activity.location, fontSize = 12.sp, color = GrayText)
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Default.DeleteOutline, contentDescription = null, tint = Color.Red.copy(alpha = 0.4f), modifier = Modifier.size(18.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ExpensesTabContentHighFidelity(trip: com.example.travelmate.domain.model.Trip?, totalSpent: Double, expenses: List<Expense>, onAddClick: () -> Unit) {
+    Column(modifier = Modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState())) {
+        DetailCard {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Column {
+                    Text(text = String.format(Locale.US, "%,.1fM đ", totalSpent / 1000000), fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Text(text = "total spent • ${expenses.size} transactions", fontSize = 11.sp, color = GrayText)
+                }
+                val remaining = (trip?.budgetAmount ?: 0.0) - totalSpent
+                Text(text = String.format(Locale.US, "%,.1fM đ left", if (remaining > 0) remaining / 1000000 else 0.0), color = GreenPrimary, fontWeight = FontWeight.Bold)
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            LinearProgressIndicator(
+                progress = { if ((trip?.budgetAmount ?: 0.0) > 0) (totalSpent / trip!!.budgetAmount).toFloat() else 0f }, 
+                modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
+                color = GreenPrimary,
+                trackColor = GrayBackground
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text(text = "By Category", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+            Button(onClick = onAddClick, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary)) {
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
+                Text(" Thêm", color = Color.White)
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        if (expenses.isEmpty()) {
+            EmptyStateView(
+                icon = Icons.AutoMirrored.Filled.ReceiptLong,
+                message = "Chưa có chi tiêu nào.",
+                actionText = "Thêm chi tiêu",
+                onAction = onAddClick
+            )
+        } else {
+            val total = expenses.sumOf { convertToVnd(it.amount, it.currency) }
+            val categories = listOf("Accommodation", "Food", "Transport", "Activities")
+            val colors = listOf(OrangePrimary, BluePrimary, PurplePrimary, GreenPrimary)
+
+            Row(modifier = Modifier.fillMaxWidth().height(120.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.Bottom) {
+                categories.forEachIndexed { index, cat ->
+                    val catAmount = expenses.filter { it.category == cat }.sumOf { convertToVnd(it.amount, it.currency) }
+                    val heightFactor = if (total > 0) (catAmount / total).toFloat() else 0.1f
+                    
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(modifier = Modifier.width(30.dp).height((heightFactor * 100).coerceAtLeast(10f).dp).clip(RoundedCornerShape(4.dp)).background(colors[index]))
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(colors[index]))
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+            expenses.forEach { expense ->
+                ExpenseListItem(expense.category, expense.description, String.format(Locale.US, "%,.0f %s", expense.amount, expense.currency), Icons.Default.Payments)
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+        }
+    }
+}
+
+@Composable
+fun PhotosTab(urls: List<String>, onAddPhoto: (String) -> Unit) {
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+        onResult = { uri ->
+            uri?.let { onAddPhoto(it.toString()) }
+        }
+    )
+
+    Column(modifier = Modifier.fillMaxSize().padding(20.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text(text = "Gallery", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Button(
+                onClick = { 
+                    photoPickerLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                }, 
+                shape = RoundedCornerShape(12.dp), 
+                colors = ButtonDefaults.buttonColors(containerColor = BluePrimary)
+            ) {
+                Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(16.dp))
+                Text(" Upload")
+            }
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        if (urls.isEmpty()) {
+            EmptyStateView(icon = Icons.Default.PhotoLibrary, message = "Chưa có ảnh nào trong bộ sưu tập.")
+        } else {
+            LazyVerticalGrid(columns = GridCells.Fixed(3), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(urls) { url ->
+                    AsyncImage(model = url, contentDescription = null, modifier = Modifier.aspectRatio(1f).clip(RoundedCornerShape(8.dp)).background(GrayBackground), contentScale = ContentScale.Crop)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun EmptyStateView(icon: ImageVector, message: String, actionText: String? = null, onAction: () -> Unit = {}) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(64.dp), tint = GrayBorder)
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(text = message, color = GrayText, fontSize = 14.sp, textAlign = TextAlign.Center)
+        if (actionText != null) {
+            Spacer(modifier = Modifier.height(24.dp))
+            Button(onClick = onAction, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = BluePrimary)) {
+                Text(text = actionText)
+            }
+        }
+    }
+}
+
+@Composable
+fun SpendingDonutChart(modifier: Modifier, expenses: List<Expense>) {
+    val total = expenses.sumOf { convertToVnd(it.amount, it.currency) }
+    
+    Canvas(modifier = modifier) {
+        drawArc(color = GrayBackground, startAngle = 0f, sweepAngle = 360f, useCenter = false, style = Stroke(width = 25f, cap = StrokeCap.Round))
+        
+        if (total > 0) {
+            val categories = listOf("Accommodation", "Food", "Transport", "Activities")
+            val colors = listOf(OrangePrimary, BluePrimary, PurplePrimary, GreenPrimary)
+            var startAngle = -90f
+
+            categories.forEachIndexed { index, cat ->
+                val catAmount = expenses.filter { it.category == cat }.sumOf { convertToVnd(it.amount, it.currency) }
+                val sweepAngle = (catAmount / total * 360).toFloat()
+                if (sweepAngle > 0) {
+                    drawArc(
+                        color = colors[index % colors.size],
+                        startAngle = startAngle,
+                        sweepAngle = sweepAngle,
+                        useCenter = false,
+                        style = Stroke(width = 25f, cap = StrokeCap.Round)
+                    )
+                    startAngle += sweepAngle
+                }
+            }
+        }
+    }
+}
+
+// Helper to match ViewModel's logic for UI charts
+private fun convertToVnd(amount: Double, currency: String): Double {
+    val rate = when (currency.uppercase()) {
+        "USD" -> 25400.0
+        "EUR" -> 27500.0
+        "SGD" -> 18800.0
+        "THB" -> 700.0
+        else -> 1.0
+    }
+    return amount * rate
+}
+
+@Composable
+fun BreakdownItem(color: Color, label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(color))
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(text = label, fontSize = 12.sp, color = GrayText)
+    }
+}
+
+@Composable
+fun ActionBtn(modifier: Modifier, icon: ImageVector, label: String, color: Color, tint: Color, onClick: () -> Unit) {
+    Surface(modifier = modifier.height(60.dp), color = color, shape = RoundedCornerShape(12.dp), onClick = onClick) {
+        Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(text = label, color = tint, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+fun HeaderIcon(icon: ImageVector, onClick: () -> Unit = {}) {
+    IconButton(onClick = onClick, modifier = Modifier.size(40.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.3f))) {
+        Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+    }
+}
+
+@Composable
+fun DetailCard(content: @Composable ColumnScope.() -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, GrayBorder.copy(alpha = 0.5f)),
+        color = MaterialTheme.colorScheme.surface
+    ) {
+        Column(modifier = Modifier.padding(20.dp), content = content)
+    }
+}
+
+@Composable
+fun ExpenseListItem(category: String, title: String, amount: String, icon: ImageVector) {
+    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Surface(color = MaterialTheme.colorScheme.surface, border = androidx.compose.foundation.BorderStroke(1.dp, GrayBorder.copy(alpha = 0.5f)), shape = CircleShape, modifier = Modifier.size(44.dp)) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(icon, contentDescription = null, tint = GrayText, modifier = Modifier.size(20.dp))
+            }
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface)
+            Text(text = category, fontSize = 11.sp, color = GrayText)
+        }
+        Text(text = amount, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun AddActivityDialog(
+    dayInfo: String,
+    onDismiss: () -> Unit, 
+    onConfirm: (String, String, String, String, String) -> Unit
+) {
+    var title by remember { mutableStateOf("") }
+    var time by remember { mutableStateOf("09:00 SA") }
+    var location by remember { mutableStateOf("") }
+    var note by remember { mutableStateOf("") }
+    var selectedType by remember { mutableStateOf("Sightseeing") }
+    
+    val types = listOf(
+        "Sightseeing" to Icons.Default.Museum,
+        "Food" to Icons.Default.Restaurant,
+        "Activity" to Icons.Default.LocalActivity,
+        "Transport" to Icons.Default.DirectionsCar,
+        "Shopping" to Icons.Default.ShoppingBag,
+        "Leisure" to Icons.Default.BeachAccess,
+        "Stay" to Icons.Default.Hotel
+    )
+
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.95f).clip(RoundedCornerShape(28.dp)),
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            Column(modifier = Modifier.padding(24.dp).verticalScroll(rememberScrollState())) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Column {
+                        Text("Add Activity", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                        Text(dayInfo, fontSize = 12.sp, color = GrayText)
+                    }
+                    IconButton(onClick = onDismiss, modifier = Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.background)) {
+                        Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurface)
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                Text("ACTIVITY TYPE", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = GrayText)
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                androidx.compose.foundation.layout.FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    types.forEach { (type, icon) ->
+                        val isSel = selectedType == type
+                        Surface(
+                            onClick = { selectedType = type },
+                            shape = RoundedCornerShape(20.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, if (isSel) BluePrimary else GrayBorder.copy(alpha = 0.5f)),
+                            color = if (isSel) BluePrimary.copy(alpha = 0.05f) else MaterialTheme.colorScheme.surface
+                        ) {
+                            Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp), tint = if (isSel) BluePrimary else GrayText)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(type, fontSize = 12.sp, color = if (isSel) BluePrimary else GrayText, fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal)
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+                DialogTextField(label = "TIME", value = time, onValueChange = { time = it }, icon = Icons.Default.AccessTime)
+                DialogTextField(label = "ACTIVITY NAME *", value = title, onValueChange = { title = it }, placeholder = "e.g. Visit Ha Long Cave")
+                DialogTextField(label = "LOCATION", value = location, onValueChange = { location = it }, placeholder = "e.g. Ha Long Bay")
+                DialogTextField(label = "NOTES", value = note, onValueChange = { note = it }, placeholder = "Optional notes...")
+
+                Spacer(modifier = Modifier.height(32.dp))
+                Button(
+                    onClick = { onConfirm(title, time, location, selectedType, note) },
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF388E3C)),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Add Activity", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DialogTextField(label: String, value: String, onValueChange: (String) -> Unit, placeholder: String = "", icon: ImageVector? = null) {
+    Column(modifier = Modifier.padding(vertical = 8.dp)) {
+        Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = GrayText)
+        Spacer(modifier = Modifier.height(8.dp))
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = { Text(placeholder, color = GrayText, fontSize = 14.sp) },
+            trailingIcon = icon?.let { { Icon(it, contentDescription = null, modifier = Modifier.size(20.dp), tint = GrayText) } },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                unfocusedBorderColor = GrayBorder.copy(alpha = 0.5f),
+                focusedBorderColor = BluePrimary,
+                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                focusedContainerColor = MaterialTheme.colorScheme.surface
+            )
+        )
+    }
+}
+
+@Composable
+fun DeleteTripConfirmDialog(tripName: String, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Default.Delete, contentDescription = null, tint = Color.Red, modifier = Modifier.size(48.dp)) },
+        title = { Text(text = "Xóa chuyến đi?", fontWeight = FontWeight.Bold) },
+        text = { Text(text = "Hành động này sẽ xóa vĩnh viễn \"$tripName\" và toàn bộ dữ liệu liên quan.") },
+        confirmButton = {
+            Button(onClick = onConfirm, colors = ButtonDefaults.buttonColors(containerColor = Color.Red), shape = RoundedCornerShape(12.dp)) {
+                Text("Xóa")
+            }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = onDismiss, shape = RoundedCornerShape(12.dp)) {
+                Text("Hủy")
+            }
+        }
+    )
+}

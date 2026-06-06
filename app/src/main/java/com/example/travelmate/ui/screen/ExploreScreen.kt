@@ -1,0 +1,225 @@
+package com.example.travelmate.ui.screen
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
+import com.example.travelmate.domain.model.Destination
+import com.example.travelmate.ui.theme.*
+import com.example.travelmate.ui.viewmodel.AuthViewModel
+import com.example.travelmate.ui.viewmodel.ExploreViewModel
+
+@Composable
+fun ExploreScreen(
+    onDestinationClick: (String) -> Unit,
+    viewModel: ExploreViewModel = hiltViewModel(),
+    authViewModel: AuthViewModel = hiltViewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    val authUiState by authViewModel.uiState.collectAsState()
+    val wishlistIds = authUiState.user?.wishlistIds ?: emptyList()
+    
+    val categories = uiState.categories
+    val recentSearches = listOf("Da Lat flowers", "Hanoi street food", "Sa Pa trekking")
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        // Search Bar
+        Row(
+            modifier = Modifier
+                .padding(20.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = uiState.searchQuery,
+                onValueChange = { viewModel.onSearchQueryChange(it) },
+                placeholder = { Text("Tìm kiếm điểm đến, địa danh...", fontSize = 14.sp) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = GrayText) },
+                trailingIcon = { Icon(Icons.Default.Mic, contentDescription = null, tint = GrayText) },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(16.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    unfocusedBorderColor = Color.Transparent,
+                    focusedBorderColor = BluePrimary,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                    focusedContainerColor = MaterialTheme.colorScheme.surface,
+                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    focusedTextColor = MaterialTheme.colorScheme.onSurface
+                )
+            )
+        }
+
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 20.dp)
+        ) {
+            // Categories
+            item {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(bottom = 24.dp)
+                ) {
+                    items(categories) { category ->
+                        FilterChip(
+                            selected = category == uiState.selectedCategory,
+                            onClick = { viewModel.onCategorySelect(category) },
+                            label = { Text(category) },
+                            shape = RoundedCornerShape(20.dp),
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = BluePrimary,
+                                selectedLabelColor = Color.White
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                enabled = true,
+                                selected = category == uiState.selectedCategory,
+                                borderColor = GrayBorder,
+                                selectedBorderColor = BluePrimary
+                            )
+                        )
+                    }
+                }
+            }
+
+            // Recent Searches
+            item {
+                Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+                    Text(text = "Tìm kiếm gần đây", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    recentSearches.forEach { search ->
+                        RecentSearchItem(text = search)
+                    }
+                }
+            }
+
+            // Popular Destinations
+            item {
+                Text(
+                    text = "Địa điểm nổi bật",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 16.dp),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+
+            if (uiState.isLoading) {
+                item {
+                    Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = BluePrimary)
+                    }
+                }
+            } else {
+                items(uiState.filteredDestinations) { destination ->
+                    PopularDestinationCard(
+                        destination = destination,
+                        isWishlisted = wishlistIds.contains(destination.id),
+                        onWishlistToggle = { authViewModel.toggleWishlist(destination.id) },
+                        onClick = { onDestinationClick(destination.id) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun RecentSearchItem(text: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Default.History, contentDescription = null, tint = GrayText, modifier = Modifier.size(20.dp))
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(text = text, color = GrayText, fontSize = 14.sp)
+    }
+}
+
+@Composable
+fun PopularDestinationCard(
+    destination: Destination, 
+    isWishlisted: Boolean,
+    onWishlistToggle: () -> Unit,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .padding(horizontal = 20.dp, vertical = 8.dp)
+            .fillMaxWidth()
+            .clickable { onClick() },
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, GrayBorder.copy(alpha = 0.5f)),
+        color = MaterialTheme.colorScheme.surface
+    ) {
+        Row(modifier = Modifier.padding(12.dp)) {
+            AsyncImage(
+                model = destination.imageUrls.firstOrNull(),
+                contentDescription = null,
+                modifier = Modifier
+                    .size(100.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(GrayBackground),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(text = destination.name, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = onWishlistToggle) {
+                            Icon(
+                                imageVector = if (isWishlisted) Icons.Default.Favorite else Icons.Default.FavoriteBorder, 
+                                contentDescription = "Wishlist", 
+                                tint = if (isWishlisted) Color.Red else BluePrimary, 
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+                Text(text = "${destination.location}, ${destination.country}", color = GrayText, fontSize = 12.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFFBC02D), modifier = Modifier.size(14.dp))
+                    Text(text = " ${destination.rating} (${destination.reviewCount})", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    if (destination.isUnesco) {
+                        Surface(color = BluePrimary.copy(alpha = 0.1f), shape = RoundedCornerShape(4.dp)) {
+                            Text(
+                                text = "UNESCO",
+                                color = BluePrimary,
+                                fontSize = 10.sp,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
