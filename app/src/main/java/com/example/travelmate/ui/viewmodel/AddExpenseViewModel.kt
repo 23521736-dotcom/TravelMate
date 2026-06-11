@@ -31,7 +31,7 @@ class AddExpenseViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(AddExpenseUiState())
     val uiState: StateFlow<AddExpenseUiState> = _uiState.asStateFlow()
 
-    fun addExpense(tripId: String?, amount: String, category: String, description: String, dateStr: String) {
+    fun addExpense(tripId: String?, amount: String, currency: String, category: String, description: String, dateStr: String) {
         val amountVal = amount.toDoubleOrNull()
         if (amountVal == null || amountVal <= 0) {
             _uiState.update { it.copy(error = "Số tiền phải là số lớn hơn 0") }
@@ -61,6 +61,7 @@ class AddExpenseViewModel @Inject constructor(
                 userId = userId,
                 tripId = tripId ?: "global",
                 amount = amountVal,
+                currency = currency,
                 category = category,
                 description = description,
                 date = dateMillis

@@ -129,17 +129,24 @@ fun ProfileScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = user?.fullName ?: "Guest User",
+                    text = user?.displayName ?: user?.fullName ?: "Guest User",
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
+                if (user?.displayName != null) {
+                    Text(
+                        text = user.fullName ?: "",
+                        fontSize = 14.sp,
+                        color = Color.White.copy(alpha = 0.8f)
+                    )
+                }
                 Text(
                     text = user?.email ?: "",
                     fontSize = 13.sp,
                     color = Color.White.copy(alpha = 0.9f),
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 32.dp, vertical = 4.dp)
+                    modifier = Modifier.padding(horizontal = 32.dp, vertical = 2.dp)
                 )
                 
                 Row(

@@ -106,7 +106,7 @@ fun AddExpenseScreen(
             Button(
                 onClick = { 
                     keyboardController?.hide()
-                    viewModel.addExpense(tripId, amount, selectedCategory, description, dateFormatter.format(Date(dateInMillis))) 
+                    viewModel.addExpense(tripId, amount, selectedCurrency, selectedCategory, description, dateFormatter.format(Date(dateInMillis)))
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
                 shape = RoundedCornerShape(12.dp),
@@ -315,7 +315,7 @@ fun AddExpenseScreen(
             Button(
                 onClick = { 
                     keyboardController?.hide()
-                    viewModel.addExpense(tripId, amount, selectedCategory, description, dateFormatter.format(Date(dateInMillis)))
+                    viewModel.addExpense(tripId, amount, selectedCurrency, selectedCategory, description, dateFormatter.format(Date(dateInMillis)))
                 },
                 modifier = Modifier.fillMaxWidth().height(58.dp),
                 shape = RoundedCornerShape(16.dp),

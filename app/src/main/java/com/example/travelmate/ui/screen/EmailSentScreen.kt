@@ -37,8 +37,8 @@ fun EmailSentScreen(
             .verticalScroll(rememberScrollState())
     ) {
         AuthHeader(
-            title = "Đã gửi!",
-            subtitle = "Kiểm tra hộp thư của bạn",
+            title = "Xác thực OTP",
+            subtitle = "Nhập mã 6 số từ email của bạn",
             backgroundColor = GreenHeader,
             onBackClick = onBackClick
         )
@@ -81,7 +81,7 @@ fun EmailSentScreen(
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "Vui lòng kiểm tra hộp thư để xác thực tài khoản của bạn",
+                text = "Vui lòng nhập mã OTP để xác thực tài khoản",
                 fontSize = 14.sp,
                 color = GrayText,
                 textAlign = TextAlign.Center,
@@ -98,9 +98,9 @@ fun EmailSentScreen(
                     Text(text = "Các bước tiếp theo:", fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 12.dp))
                     
                     StepItem(number = "1", text = "Mở email bạn vừa nhận")
-                    StepItem(number = "2", text = "Nhấn vào nút xác nhận trong email")
-                    StepItem(number = "3", text = "Tài khoản sẽ được xác thực tự động")
-                    StepItem(number = "4", text = "Quay lại ứng dụng để đăng nhập")
+                    StepItem(number = "2", text = "Lấy mã OTP 6 chữ số")
+                    StepItem(number = "3", text = "Nhập mã vào ô xác thực trong ứng dụng")
+                    StepItem(number = "4", text = "Tài khoản sẽ được kích hoạt ngay lập tức")
                 }
             }
 

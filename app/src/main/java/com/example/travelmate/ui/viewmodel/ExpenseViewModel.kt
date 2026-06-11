@@ -152,13 +152,17 @@ class ExpenseViewModel @Inject constructor(
         }
     }
 
-    private fun convertToVnd(amount: Double, currency: String?): Double {
+    fun convertToVnd(amount: Double, currency: String?): Double {
         val safeCurrency = currency?.uppercase() ?: "VND"
         val rate = when (safeCurrency) {
             "USD" -> 25400.0
             "EUR" -> 27500.0
             "SGD" -> 18800.0
-            "THB" -> 700.0
+            "THB" -> 750.0
+            "JPY" -> 165.0
+            "KRW" -> 18.5
+            "CNY" -> 3500.0
+            "GBP" -> 32000.0
             else -> 1.0
         }
         return amount * rate

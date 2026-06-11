@@ -161,6 +161,7 @@ fun MyTripsScreen(
                             date = formatDateRange(trip.startDate, trip.endDate),
                             duration = "${trip.durationDays} ngày",
                             budget = String.format(Locale.US, "%,.0f %s", trip.budgetAmount, trip.currency),
+                            coverImageUrl = trip.coverImageUrl,
                             onClick = { onTripClick(trip.id) }
                         )
                     }
@@ -196,6 +197,7 @@ fun DetailedTripCard(
     date: String,
     duration: String,
     budget: String,
+    coverImageUrl: String = "",
     badge: String? = null,
     onClick: () -> Unit
 ) {
@@ -213,6 +215,14 @@ fun DetailedTripCard(
                     .height(180.dp)
                     .background(GrayBackground)
             ) {
+                if (coverImageUrl.isNotEmpty()) {
+                    coil.compose.AsyncImage(
+                        model = coverImageUrl,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    )
+                }
                 if (badge != null) {
                     Surface(
                         modifier = Modifier

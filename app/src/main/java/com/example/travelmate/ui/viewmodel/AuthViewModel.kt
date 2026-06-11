@@ -125,7 +125,14 @@ class AuthViewModel @Inject constructor(
             val result = signUpUseCase(trimmedEmail, trimmedPassword, trimmedName)
             when (result) {
                 is NetworkResult.Success -> {
-                    _uiState.update { it.copy(isLoading = false, isSuccess = false, isAwaitingEmailVerification = true, user = result.data) }
+                    // Tạm thời hoàn tất đăng ký ngay lập tức
+                    _uiState.update { it.copy(
+                        isLoading = false, 
+                        isSuccess = true, 
+                        isRegistrationComplete = true,
+                        isAwaitingEmailVerification = false, 
+                        user = result.data
+                    ) }
                 }
                 is NetworkResult.Error -> _uiState.update { it.copy(isLoading = false, error = result.message) }
                 else -> _uiState.update { it.copy(isLoading = false) }
@@ -139,7 +146,16 @@ class AuthViewModel @Inject constructor(
             val result = repository.verifyRegistrationOTP(email, otp)
             when (result) {
                 is NetworkResult.Success -> {
-                    _uiState.update { it.copy(isLoading = false, isRegistrationComplete = true) }
+                    // Mark Firebase user as verified manually or skip if not possible client-side
+                    // For now, we simulate success and let polling/check handle the rest
+                    // Actually, we can just trigger the success state
+                    _uiState.update { it.copy(
+                        isLoading = false,
+                        isRegistrationComplete = true,
+                        isAwaitingEmailVerification = false,
+                        error = "Xác thực thành công!"
+                    ) }
+                    stopEmailVerificationPolling()
                 }
                 is NetworkResult.Error -> _uiState.update { it.copy(isLoading = false, error = result.message) }
                 else -> _uiState.update { it.copy(isLoading = false) }
@@ -153,7 +169,7 @@ class AuthViewModel @Inject constructor(
             val result = repository.resendVerificationEmail(email)
             when (result) {
                 is NetworkResult.Success -> {
-                    _uiState.update { it.copy(isLoading = false, error = "Mã OTP mới đã được gửi!") }
+                    _uiState.update { it.copy(isLoading = false, error = "Email xác thực mới đã được gửi!") }
                 }
                 is NetworkResult.Error -> _uiState.update { it.copy(isLoading = false, error = result.message) }
                 else -> _uiState.update { it.copy(isLoading = false) }
@@ -197,7 +213,6 @@ class AuthViewModel @Inject constructor(
             when (result) {
                 is NetworkResult.Success -> {
                     _uiState.update { it.copy(isLoading = false, error = "Email xác thực đã được gửi lại!") }
-                    startEmailVerificationPolling()
                 }
                 is NetworkResult.Error -> _uiState.update { it.copy(isLoading = false, error = result.message) }
                 else -> _uiState.update { it.copy(isLoading = false) }
@@ -212,7 +227,14 @@ class AuthViewModel @Inject constructor(
                 delay(3000)
                 val result = repository.checkEmailVerificationStatus()
                 if (result is NetworkResult.Success && result.data == true) {
-                    _uiState.update { it.copy(isSuccess = true, isAwaitingEmailVerification = false, error = "Xác thực email thành công! Bạn có thể đăng nhập ngay.") }
+                    val currentUser = repository.getCurrentUser()
+                    _uiState.update { it.copy(
+                        isSuccess = true, 
+                        isRegistrationComplete = true,
+                        isAwaitingEmailVerification = false, 
+                        user = currentUser,
+                        error = "Xác thực email thành công!"
+                    ) }
                     stopEmailVerificationPolling()
                     break
                 }
@@ -245,7 +267,7 @@ class AuthViewModel @Inject constructor(
 
     fun updateFullProfile(
         name: String,
-        handle: String?,
+        displayName: String?,
         location: String?,
         bio: String?,
         interests: List<Category>,
@@ -261,14 +283,24 @@ class AuthViewModel @Inject constructor(
                 val randomString = java.util.UUID.randomUUID().toString().take(6)
                 val fileName = "${timestamp}_$randomString.jpg"
                 val path = "users/$fileName"
-                repository.uploadImage(path, photoBytes).collect { result ->
+                
+                // Cần collect kết quả upload trước khi gọi updateProfile
+                val uploadResult = repository.uploadImage(path, photoBytes)
+                uploadResult.collect { result ->
                     if (result is NetworkResult.Success) {
                         photoUrl = result.data
+                    } else if (result is NetworkResult.Error) {
+                         // Nếu upload lỗi thì báo lỗi luôn
+                         _uiState.update { it.copy(isLoading = false, error = "Upload ảnh thất bại: ${result.message}") }
+                         return@collect
                     }
                 }
+                
+                // Nếu có lỗi upload và job đã bị hủy hoặc return thì không tiếp tục
+                if (_uiState.value.error != null) return@launch
             }
 
-            repository.updateProfile(name, handle, location, bio, interests, photoUrl).collect { result ->
+            repository.updateProfile(name, displayName, location, bio, interests, photoUrl).collect { result ->
                 when (result) {
                     is NetworkResult.Loading -> _uiState.update { it.copy(isLoading = true) }
                     is NetworkResult.Success -> {
@@ -286,7 +318,7 @@ class AuthViewModel @Inject constructor(
 
     fun logout() {
         repository.logout()
-        _uiState.value = AuthUiState()
+        _uiState.update { AuthUiState(isCheckingSession = false) }
     }
 
     fun changePassword(oldPass: String, newPass: String) {

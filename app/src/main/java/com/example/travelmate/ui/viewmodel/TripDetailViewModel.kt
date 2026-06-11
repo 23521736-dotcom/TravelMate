@@ -192,25 +192,33 @@ class TripDetailViewModel @Inject constructor(
     }
 
     fun addPhoto(byteArray: ByteArray) {
-        val tripId = _uiState.value.trip?.id ?: return
-        val path = "gallery/$tripId/${UUID.randomUUID()}.jpg"
-        
-        viewModelScope.launch {
-            tripRepository.uploadImage(path, byteArray).collect { result ->
-                if (result is NetworkResult.Success) {
-                    addPhotoUrl(result.data)
-                }
-            }
-        }
+        addPhotos(listOf(byteArray))
     }
 
-    private fun addPhotoUrl(url: String) {
+    fun addPhotos(byteArrayList: List<ByteArray>) {
         val tripId = _uiState.value.trip?.id ?: return
+        
         viewModelScope.launch {
-            tripRepository.addGalleryPhoto(tripId, url).collect { result ->
-                if (result is NetworkResult.Success) {
-                    getTrip(tripId)
+            _uiState.update { it.copy(isLoading = true) }
+            
+            var successCount = 0
+            byteArrayList.forEach { byteArray ->
+                val path = "gallery/$tripId/${UUID.randomUUID()}.jpg"
+                tripRepository.uploadImage(path, byteArray).collect { result ->
+                    if (result is NetworkResult.Success) {
+                        // Thêm URL vào Database
+                        tripRepository.addGalleryPhoto(tripId, result.data).collect { addResult ->
+                            if (addResult is NetworkResult.Success) {
+                                successCount++
+                            }
+                        }
+                    }
                 }
+            }
+            
+            _uiState.update { it.copy(isLoading = false) }
+            if (successCount > 0) {
+                getTrip(tripId)
             }
         }
     }

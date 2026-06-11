@@ -103,7 +103,7 @@ fun DestinationDetailScreen(
                     // Image Header
                     Box(modifier = Modifier.fillMaxWidth().height(300.dp)) {
                         AsyncImage(
-                            model = destination.coverImage ?: destination.imageUrls.firstOrNull() ?: "https://images.unsplash.com/photo-1583417319070-4a69db38a482",
+                            model = destination.coverImage ?: destination.imageUrls.firstOrNull(),
                             contentDescription = null,
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop

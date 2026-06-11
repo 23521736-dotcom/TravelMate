@@ -19,7 +19,7 @@ interface AuthRepository {
     fun logout()
     fun updateProfile(
         name: String,
-        handle: String?,
+        displayName: String?,
         location: String?,
         bio: String?,
         interests: List<Category>,

@@ -49,7 +49,7 @@ fun EditProfileScreen(
     val context = LocalContext.current
 
     var name by remember { mutableStateOf("") }
-    var handle by remember { mutableStateOf("") }
+    var displayName by remember { mutableStateOf("") }
     var bio by remember { mutableStateOf("") }
     var location by remember { mutableStateOf("") }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
@@ -71,7 +71,7 @@ fun EditProfileScreen(
     LaunchedEffect(user) {
         if (user != null && name.isEmpty()) {
             name = user.fullName ?: ""
-            handle = user.handle ?: ""
+            displayName = user.displayName ?: ""
             bio = user.bio ?: ""
             location = user.location ?: ""
             selectedInterests.clear()
@@ -167,7 +167,7 @@ fun EditProfileScreen(
 
                 // Custom TextFields
                 TransparentEditField(value = name, onValueChange = { name = it }, placeholder = "Họ và tên")
-                TransparentEditField(value = handle, onValueChange = { handle = it }, placeholder = "@username")
+                TransparentEditField(value = displayName, onValueChange = { displayName = it }, placeholder = "Tên hiển thị")
                 TransparentEditField(value = location, onValueChange = { location = it }, placeholder = "Vị trí (vd: Hà Nội, Việt Nam)")
                 TransparentEditField(value = bio, onValueChange = { bio = it }, placeholder = "Giới thiệu bản thân", singleLine = false)
 
@@ -231,7 +231,7 @@ fun EditProfileScreen(
                             val photoBytes = selectedImageUri?.let { uri ->
                                 context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                             }
-                            viewModel.updateFullProfile(name, handle, location, bio, selectedInterests.toList(), photoBytes)
+                            viewModel.updateFullProfile(name, displayName, location, bio, selectedInterests.toList(), photoBytes)
                         },
                         modifier = Modifier.weight(1f).height(56.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color.White),

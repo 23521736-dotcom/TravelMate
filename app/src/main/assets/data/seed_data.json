@@ -7,7 +7,7 @@
       "password": "password123",
       "bio": "Đam mê khám phá những vùng đất mới 🌍 | Foodie | Travel Photographer",
       "location": "Hà Nội, Việt Nam",
-      "handle": "@alex.travels",
+      "displayName": "Alex travels",
       "totalTrips": 5,
       "totalSpent": 23000000.0,
       "upcomingTrips": 2,

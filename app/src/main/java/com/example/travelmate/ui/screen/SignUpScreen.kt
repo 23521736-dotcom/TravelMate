@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -45,6 +46,8 @@ fun SignUpScreen(
     var agreeToTerms by remember { mutableStateOf(false) }
 
     val uiState by viewModel.uiState.collectAsState()
+
+    var otpCode by remember { mutableStateOf("") }
 
     LaunchedEffect(uiState.isRegistrationComplete) {
         if (uiState.isRegistrationComplete) {
@@ -85,12 +88,11 @@ fun SignUpScreen(
                 .fillMaxWidth()
         ) {
             if (uiState.isAwaitingEmailVerification) {
-                var otpValue by remember { mutableStateOf("") }
                 EmailVerificationContent(
                     email = email,
-                    otpValue = otpValue,
-                    onOtpChange = { if (it.length <= 6) otpValue = it },
-                    onVerifyOtp = { viewModel.verifyRegistrationOTP(email, otpValue) },
+                    otpCode = otpCode,
+                    onOtpChange = { otpCode = it },
+                    onVerifyOtp = { viewModel.verifyRegistrationOTP(email, it) },
                     onResendEmail = { viewModel.resendRegistrationEmail(email) },
                     onLoginClick = onLoginClick,
                     isLoading = uiState.isLoading,
@@ -143,9 +145,9 @@ fun SignUpScreen(
 @Composable
 fun EmailVerificationContent(
     email: String,
-    otpValue: String,
+    otpCode: String,
     onOtpChange: (String) -> Unit,
-    onVerifyOtp: () -> Unit,
+    onVerifyOtp: (String) -> Unit,
     onResendEmail: () -> Unit,
     onLoginClick: () -> Unit,
     isLoading: Boolean = false,
@@ -156,20 +158,20 @@ fun EmailVerificationContent(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Icon(
-            imageVector = Icons.Default.MarkEmailRead,
+            imageVector = Icons.Default.VpnKey,
             contentDescription = null,
             modifier = Modifier.size(80.dp),
             tint = OrangeHeader
         )
         Spacer(modifier = Modifier.height(24.dp))
         Text(
-            text = "Xác thực tài khoản",
+            text = "Nhập mã xác thực",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = "Mã OTP đã được gửi đến:",
+            text = "Mã OTP 6 số đã được gửi đến email:",
             color = GrayText,
             fontSize = 14.sp
         )
@@ -177,51 +179,54 @@ fun EmailVerificationContent(
             text = email,
             fontWeight = FontWeight.Bold,
             color = BluePrimary,
-            fontSize = 16.sp
+            fontSize = 16.sp,
+            textAlign = TextAlign.Center
         )
+        
         Spacer(modifier = Modifier.height(24.dp))
         
         AuthTextField(
-            value = otpValue,
-            onValueChange = onOtpChange,
+            value = otpCode,
+            onValueChange = { if (it.length <= 6) onOtpChange(it) },
             label = "Mã OTP",
             placeholder = "123456",
-            leadingIcon = Icons.Default.LockClock,
+            leadingIcon = Icons.Default.Pin,
             keyboardType = KeyboardType.Number
         )
 
         if (error != null) {
             Text(
                 text = error,
-                color = MaterialTheme.colorScheme.error,
+                color = if (error.contains("thành công") || error.contains("đã được gửi")) GreenHeader else MaterialTheme.colorScheme.error,
                 fontSize = 12.sp,
-                modifier = Modifier.padding(top = 8.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        if (isLoading) {
-            CircularProgressIndicator(color = OrangeHeader)
-        } else {
-            AuthButton(
-                text = "Xác nhận OTP",
-                onClick = onVerifyOtp,
-                color = OrangeHeader
+                modifier = Modifier.padding(top = 16.dp),
+                textAlign = TextAlign.Center
             )
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        Text(
-            text = "Không nhận được mã? Gửi lại",
-            color = BluePrimary,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.clickable { onResendEmail() }
-        )
-        
-        Spacer(modifier = Modifier.height(16.dp))
+        if (isLoading) {
+            CircularProgressIndicator(color = OrangeHeader)
+        } else {
+            AuthButton(
+                text = "Xác nhận",
+                onClick = { if (otpCode.length == 6) onVerifyOtp(otpCode) },
+                color = OrangeHeader
+            )
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            Text(
+                text = "Không nhận được mã? Gửi lại",
+                color = BluePrimary,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.clickable { onResendEmail() }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
         
         TextButton(onClick = onLoginClick) {
             Text(text = "Quay lại Đăng nhập", color = BluePrimary)

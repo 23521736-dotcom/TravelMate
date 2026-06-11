@@ -34,7 +34,7 @@ fun InterestSelectionScreen(
     val user = uiState.user
 
     var name by remember { mutableStateOf("") }
-    var handle by remember { mutableStateOf("") }
+     var displayName by remember { mutableStateOf("") }
     var location by remember { mutableStateOf("") }
     var bio by remember { mutableStateOf("") }
     val selectedInterests = remember { mutableStateListOf<Category>() }
@@ -43,7 +43,7 @@ fun InterestSelectionScreen(
     LaunchedEffect(user) {
         if (user != null && name.isEmpty()) {
             name = user.fullName ?: ""
-            handle = user.handle ?: ""
+            displayName = user.displayName ?: ""
             location = user.location ?: ""
             bio = user.bio ?: ""
             if (selectedInterests.isEmpty()) {
@@ -94,7 +94,7 @@ fun InterestSelectionScreen(
 
         // Profile Fields
         TransparentEditField(value = name, onValueChange = { name = it }, placeholder = "Họ và tên")
-        TransparentEditField(value = handle, onValueChange = { handle = it }, placeholder = "@username")
+        TransparentEditField(value = displayName, onValueChange = { displayName = it }, placeholder = "Tên hiển thị")
         TransparentEditField(value = location, onValueChange = { location = it }, placeholder = "Vị trí (vd: Hà Nội, Việt Nam)")
         TransparentEditField(value = bio, onValueChange = { bio = it }, placeholder = "Giới thiệu bản thân", singleLine = false)
 
@@ -160,7 +160,7 @@ fun InterestSelectionScreen(
             onClick = {
                 viewModel.updateFullProfile(
                     name = name,
-                    handle = handle,
+                    displayName = displayName,
                     location = location,
                     bio = bio,
                     interests = selectedInterests.toList()

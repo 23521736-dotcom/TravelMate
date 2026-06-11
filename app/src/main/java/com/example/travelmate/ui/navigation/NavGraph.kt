@@ -24,9 +24,9 @@ fun NavGraph(
     val authUiState by authViewModel.uiState.collectAsState()
 
     // Determine initial route once to avoid NavHost recreation
-    val startRoute = remember(authUiState.isCheckingSession, authUiState.user) {
+    val startRoute = remember(authUiState.isCheckingSession, authUiState.user, authUiState.isAwaitingEmailVerification) {
         if (authUiState.isCheckingSession) null
-        else if (authUiState.user != null) Screen.Main.route 
+        else if (authUiState.user != null && !authUiState.isAwaitingEmailVerification) Screen.Main.route
         else Screen.Login.route
     }
 
@@ -92,7 +92,9 @@ fun NavGraph(
                     viewModel = authViewModel,
                     onBackClick = { navController.popBackStack() },
                     onLoginClick = { navController.navigate(Screen.Login.route) },
-                    onSignUpComplete = { navController.navigate(Screen.EmailSent.route) }
+                    onSignUpComplete = { 
+                        // Do nothing, stay on SignUpScreen to show OTP input
+                    }
                 )
             }
             composable(Screen.ForgotPassword.route) {

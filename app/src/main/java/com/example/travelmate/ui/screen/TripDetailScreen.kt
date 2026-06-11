@@ -235,17 +235,20 @@ fun TripDetailScreen(
                         )
                         3 -> PhotosTab(
                             urls = trip?.galleryUrls ?: emptyList(),
-                            onAddPhoto = { uriString ->
-                                val uri = android.net.Uri.parse(uriString)
-                                try {
-                                    val inputStream = context.contentResolver.openInputStream(uri)
-                                    val bytes = inputStream?.readBytes()
-                                    if (bytes != null) {
-                                        viewModel.addPhoto(bytes)
+                            onAddPhotos = { uriStrings ->
+                                val byteArrayList = mutableListOf<ByteArray>()
+                                uriStrings.forEach { uriString ->
+                                    val uri = android.net.Uri.parse(uriString)
+                                    try {
+                                        context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                                            byteArrayList.add(inputStream.readBytes())
+                                        }
+                                    } catch (e: Exception) {
+                                        e.printStackTrace()
                                     }
-                                    inputStream?.close()
-                                } catch (e: Exception) {
-                                    e.printStackTrace()
+                                }
+                                if (byteArrayList.isNotEmpty()) {
+                                    viewModel.addPhotos(byteArrayList)
                                 }
                             },
                             onDeletePhoto = { url -> viewModel.deletePhoto(url) }
@@ -558,11 +561,13 @@ fun ExpensesTabContentHighFidelity(
 }
 
 @Composable
-fun PhotosTab(urls: List<String>, onAddPhoto: (String) -> Unit, onDeletePhoto: (String) -> Unit) {
+fun PhotosTab(urls: List<String>, onAddPhotos: (List<String>) -> Unit, onDeletePhoto: (String) -> Unit) {
     val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia(),
-        onResult = { uri ->
-            uri?.let { onAddPhoto(it.toString()) }
+        contract = ActivityResultContracts.PickMultipleVisualMedia(),
+        onResult = { uris ->
+            if (uris.isNotEmpty()) {
+                onAddPhotos(uris.map { it.toString() })
+            }
         }
     )
 

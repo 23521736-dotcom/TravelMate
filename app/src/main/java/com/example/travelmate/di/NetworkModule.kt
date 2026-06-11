@@ -1,6 +1,5 @@
 package com.example.travelmate.di
 
-import com.example.travelmate.data.remote.EmailService
 import com.example.travelmate.data.remote.GroqApiService
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import dagger.Module
@@ -32,12 +31,6 @@ object NetworkModule {
             install(Postgrest)
             install(Storage)
         }
-    }
-
-    @Provides
-    @Singleton
-    fun provideEmailService(): EmailService {
-        return EmailService()
     }
 
     @Provides

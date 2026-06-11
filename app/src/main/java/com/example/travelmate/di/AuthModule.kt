@@ -2,7 +2,6 @@ package com.example.travelmate.di
 
 import android.content.Context
 import com.example.travelmate.data.local.PreferenceDataStore
-import com.example.travelmate.data.remote.EmailService
 import com.example.travelmate.data.remote.SupabaseService
 import com.example.travelmate.data.repository.AuthRepositoryImpl
 import com.example.travelmate.domain.repository.AuthRepository
@@ -39,11 +38,10 @@ object AuthModule {
         firebaseAuth: FirebaseAuth,
         database: FirebaseDatabase,
         preferenceDataStore: PreferenceDataStore,
-        emailService: EmailService,
         supabaseService: SupabaseService,
         json: Json,
         @ApplicationContext context: Context
     ): AuthRepository {
-        return AuthRepositoryImpl(firebaseAuth, database, preferenceDataStore, emailService, supabaseService, json, context)
+        return AuthRepositoryImpl(firebaseAuth, database, preferenceDataStore, supabaseService, json, context)
     }
 }

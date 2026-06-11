@@ -19,6 +19,12 @@ import com.example.travelmate.ui.theme.GrayText
 
 import com.example.travelmate.ui.navigation.Screen as AppScreen
 
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+
 sealed class NavItem(val route: String, val label: String, val icon: ImageVector) {
     object Home : NavItem("home", "Home", Icons.Default.Home)
     object Explore : NavItem("explore", "Explore", Icons.Default.Search)
@@ -42,6 +48,10 @@ fun MainContainer(
 ) {
     var selectedScreen by remember { mutableStateOf<NavItem>(NavItem.Home) }
     var isChatVisible by remember { mutableStateOf(false) }
+    
+    // FAB position state
+    var offsetX by remember { mutableStateOf(0f) }
+    var offsetY by remember { mutableStateOf(0f) }
 
     Scaffold(
         bottomBar = {
@@ -79,7 +89,16 @@ fun MainContainer(
                 onClick = { isChatVisible = !isChatVisible },
                 containerColor = BluePrimary,
                 contentColor = androidx.compose.ui.graphics.Color.White,
-                shape = androidx.compose.foundation.shape.CircleShape
+                shape = androidx.compose.foundation.shape.CircleShape,
+                modifier = Modifier
+                    .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }
+                    .pointerInput(Unit) {
+                        detectDragGestures { change, dragAmount ->
+                            change.consume()
+                            offsetX += dragAmount.x
+                            offsetY += dragAmount.y
+                        }
+                    }
             ) {
                 Icon(
                     if (isChatVisible) Icons.Default.Close else Icons.Default.AutoAwesome,
