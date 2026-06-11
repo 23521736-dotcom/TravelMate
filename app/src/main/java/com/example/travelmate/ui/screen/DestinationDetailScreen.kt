@@ -66,21 +66,14 @@ fun DestinationDetailScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(text = "Giá trung bình/ngày", fontSize = 12.sp, color = GrayText)
-                            Text(
-                                text = String.format(Locale.US, "%,.0f đ", destination.avgPricePerDay),
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = OrangePrimary
-                            )
-                        }
                         Button(
                             onClick = { onPlanTripClick() },
-                            modifier = Modifier.height(56.dp).weight(1.5f),
+                            modifier = Modifier.height(56.dp).fillMaxWidth(),
                             shape = RoundedCornerShape(16.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = BluePrimary)
                         ) {
+                            Icon(Icons.Default.Add, contentDescription = null, tint = Color.White)
+                            Spacer(modifier = Modifier.width(8.dp))
                             Text(text = "Lên kế hoạch ngay", fontWeight = FontWeight.Bold, color = Color.White)
                         }
                     }
@@ -190,9 +183,8 @@ fun DestinationDetailScreen(
 
                         // Quick Info Cards
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            val priceLevel = if (destination.priceLevel > 0) "$".repeat(minOf(destination.priceLevel, 5)) else "N/A"
-                            InfoBox(modifier = Modifier.weight(1f), icon = Icons.Default.Paid, title = "Mức giá", value = priceLevel)
-                            InfoBox(modifier = Modifier.weight(1f), icon = Icons.Default.Groups, title = "Đánh giá", value = "${destination.reviewCount}+")
+                            InfoBox(modifier = Modifier.weight(1f), icon = Icons.Default.Groups, title = "Lượt đánh giá", value = "${destination.reviewCount}")
+                            InfoBox(modifier = Modifier.weight(1f), icon = Icons.Default.Star, title = "Điểm đánh giá", value = "${destination.rating}/5.0")
                         }
 
                         Spacer(modifier = Modifier.height(24.dp))

@@ -11,9 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Payments
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -110,8 +108,8 @@ fun ExpenseScreen(
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                    contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 100.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     // Monthly Budget Card
                     item {
@@ -129,20 +127,42 @@ fun ExpenseScreen(
                         }
                     }
 
-                    // Recent Transactions
+                    // Recent Transactions Header
                     item {
-                        Text(
-                            text = "Giao dịch gần đây",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Giao dịch gần đây",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            if (uiState.expenses.size > 10) {
+                                TextButton(onClick = { /* View all */ }) {
+                                    Text("Xem tất cả", color = BluePrimary)
+                                }
+                            }
+                        }
                     }
                     
                     if (uiState.expenses.isEmpty()) {
                         item {
-                            Box(modifier = Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) {
-                                Text(text = "Chưa có dữ liệu chi tiêu", color = GrayText)
+                            Surface(
+                                modifier = Modifier.fillMaxWidth().height(200.dp),
+                                shape = RoundedCornerShape(20.dp),
+                                color = GrayBackground.copy(alpha = 0.3f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, GrayBorder.copy(alpha = 0.5f))
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Icon(Icons.Default.Payments, contentDescription = null, tint = GrayText, modifier = Modifier.size(48.dp))
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        Text(text = "Chưa có dữ liệu chi tiêu", color = GrayText)
+                                    }
+                                }
                             }
                         }
                     } else {
@@ -150,7 +170,9 @@ fun ExpenseScreen(
                             GlobalExpenseItem(
                                 category = expense.category,
                                 description = expense.description,
-                                amount = String.format(Locale.US, "%,.0f %s", expense.amount, expense.currency),
+                                amount = String.format(Locale.US, "%,.0f đ", expense.amount * (if (expense.currency == "VND") 1.0 else 25000.0)),
+                                currency = expense.currency,
+                                originalAmount = expense.amount,
                                 icon = Icons.Default.Payments
                             )
                         }
@@ -365,24 +387,46 @@ fun SetBudgetDialog(
 }
 
 @Composable
-fun GlobalExpenseItem(category: String, description: String, amount: String, icon: ImageVector) {
+fun GlobalExpenseItem(category: String, description: String, amount: String, currency: String, originalAmount: Double, icon: ImageVector) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, GrayBorder.copy(alpha = 0.5f)),
-        color = MaterialTheme.colorScheme.surface
+        shape = RoundedCornerShape(20.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, GrayBorder.copy(alpha = 0.3f)),
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 1.dp
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
-                color = MaterialTheme.colorScheme.background,
-                shape = CircleShape,
-                modifier = Modifier.size(48.dp)
+                color = when(category) {
+                    "Accommodation" -> OrangeLight
+                    "Food" -> BluePrimary.copy(alpha = 0.1f)
+                    "Transport" -> GreenLight
+                    else -> PurplePrimary.copy(alpha = 0.1f)
+                },
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.size(52.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(icon, contentDescription = null, tint = BluePrimary, modifier = Modifier.size(24.dp))
+                    Icon(
+                        imageVector = when(category) {
+                            "Accommodation" -> Icons.Default.Hotel
+                            "Food" -> Icons.Default.Restaurant
+                            "Transport" -> Icons.Default.DirectionsCar
+                            "Activities" -> Icons.Default.LocalActivity
+                            else -> icon
+                        },
+                        contentDescription = null, 
+                        tint = when(category) {
+                            "Accommodation" -> OrangePrimary
+                            "Food" -> BluePrimary
+                            "Transport" -> GreenPrimary
+                            else -> PurplePrimary
+                        },
+                        modifier = Modifier.size(24.dp)
+                    )
                 }
             }
             Spacer(modifier = Modifier.width(16.dp))
@@ -391,7 +435,9 @@ fun GlobalExpenseItem(category: String, description: String, amount: String, ico
                     text = if (description.isNotBlank()) description else category,
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
                 Text(
                     text = category,
@@ -399,12 +445,21 @@ fun GlobalExpenseItem(category: String, description: String, amount: String, ico
                     color = GrayText
                 )
             }
-            Text(
-                text = amount,
-                fontWeight = FontWeight.Bold,
-                fontSize = 15.sp,
-                color = OrangePrimary
-            )
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = amount,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                if (currency != "VND") {
+                    Text(
+                        text = String.format(Locale.US, "%,.0f %s", originalAmount, currency),
+                        fontSize = 11.sp,
+                        color = GrayText
+                    )
+                }
+            }
         }
     }
 }

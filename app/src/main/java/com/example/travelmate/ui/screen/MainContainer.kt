@@ -8,6 +8,7 @@ import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
@@ -46,7 +47,7 @@ fun MainContainer(
     onSettingsClick: () -> Unit,
     authViewModel: AuthViewModel = hiltViewModel()
 ) {
-    var selectedScreen by remember { mutableStateOf<NavItem>(NavItem.Home) }
+    var selectedScreen by rememberSaveable { mutableStateOf<String>(NavItem.Home.route) }
     var isChatVisible by remember { mutableStateOf(false) }
     
     // FAB position state
@@ -67,12 +68,12 @@ fun MainContainer(
                     NavItem.Profile
                 )
                 items.forEach { item ->
-                    val isSelected = selectedScreen == item
+                    val isSelected = selectedScreen == item.route
                     NavigationBarItem(
                         icon = { Icon(item.icon, contentDescription = item.label) },
                         label = { Text(item.label) },
                         selected = isSelected,
-                        onClick = { selectedScreen = item },
+                        onClick = { selectedScreen = item.route },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = BluePrimary,
                             selectedTextColor = BluePrimary,
@@ -109,20 +110,20 @@ fun MainContainer(
     ) { innerPadding ->
         Surface(modifier = Modifier.padding(innerPadding)) {
             when (selectedScreen) {
-                is NavItem.Home -> HomeScreen(
-                    onProfileClick = { selectedScreen = NavItem.Profile },
+                NavItem.Home.route -> HomeScreen(
+                    onProfileClick = { selectedScreen = NavItem.Profile.route },
                     onNotificationsClick = onNotificationsClick,
                     onDestinationClick = onDestinationClick,
                     onTripClick = onTripClick,
                     authViewModel = authViewModel
                 )
-                is NavItem.Explore -> ExploreScreen(
+                NavItem.Explore.route -> ExploreScreen(
                     onDestinationClick = onDestinationClick,
                     authViewModel = authViewModel
                 )
-                is NavItem.Trips -> MyTripsScreen(onAddTripClick = onPlanTripClick, onTripClick = onTripClick)
-                is NavItem.Expense -> ExpenseScreen(onAddExpenseClick = { onAddExpenseClick() })
-                is NavItem.Profile -> ProfileScreen(
+                NavItem.Trips.route -> MyTripsScreen(onAddTripClick = onPlanTripClick, onTripClick = onTripClick)
+                NavItem.Expense.route -> ExpenseScreen(onAddExpenseClick = { onAddExpenseClick() })
+                NavItem.Profile.route -> ProfileScreen(
                     onEditProfileClick = onEditProfileClick,
                     onWishlistClick = onWishlistClick,
                     onSettingsClick = onSettingsClick,

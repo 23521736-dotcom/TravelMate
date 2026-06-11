@@ -77,7 +77,7 @@ class PlanTripViewModel @Inject constructor(
         _uiState.update { it.copy(
             destination = dest.name, 
             destinationId = dest.id,
-            coverImageUrl = dest.imageUrls.firstOrNull() ?: "",
+            coverImageUrl = dest.coverImage ?: dest.imageUrls.firstOrNull() ?: "",
             filteredDestinations = emptyList() 
         )}
     }

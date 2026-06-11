@@ -305,9 +305,21 @@ fun OverviewTab(trip: com.example.travelmate.domain.model.Trip?, totalSpent: Dou
                 SpendingDonutChart(modifier = Modifier.size(100.dp), expenses = expenses)
                 Spacer(modifier = Modifier.width(24.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    BreakdownItem(color = OrangePrimary, label = "Accommodation")
-                    BreakdownItem(color = BluePrimary, label = "Food & Drinks")
-                    BreakdownItem(color = PurplePrimary, label = "Activities")
+                    val categoryTotals = expenses.groupBy { it.category }.mapValues { it.value.sumOf { exp -> convertToVnd(exp.amount, exp.currency) } }
+                    val sortedCategories = categoryTotals.entries.sortedByDescending { it.value }
+                    val colors = listOf(OrangePrimary, BluePrimary, PurplePrimary, GreenPrimary, Color.Magenta)
+                    
+                    if (sortedCategories.isEmpty()) {
+                        Text(text = "No expenses yet", fontSize = 12.sp, color = GrayText)
+                    } else {
+                        sortedCategories.take(4).forEachIndexed { index, entry ->
+                            BreakdownItem(
+                                color = colors[index % colors.size], 
+                                label = entry.key,
+                                amount = String.format(Locale.US, "%,.0f đ", entry.value)
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -529,19 +541,22 @@ fun ExpensesTabContentHighFidelity(
                 onAction = onAddClick
             )
         } else {
-            val total = expenses.sumOf { convertToVnd(it.amount, it.currency) }
-            val categories = listOf("Accommodation", "Food", "Transport", "Activities")
+            val categoryTotals = expenses.groupBy { it.category }.mapValues { it.value.sumOf { exp -> convertToVnd(exp.amount, exp.currency) } }
+            val total = categoryTotals.values.sum()
+            val categories = categoryTotals.keys.toList().take(4)
             val colors = listOf(OrangePrimary, BluePrimary, PurplePrimary, GreenPrimary)
 
-            Row(modifier = Modifier.fillMaxWidth().height(120.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.Bottom) {
+            Row(modifier = Modifier.fillMaxWidth().height(140.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.Bottom) {
                 categories.forEachIndexed { index, cat ->
-                    val catAmount = expenses.filter { it.category == cat }.sumOf { convertToVnd(it.amount, it.currency) }
+                    val catAmount = categoryTotals[cat] ?: 0.0
                     val heightFactor = if (total > 0) (catAmount / total).toFloat() else 0.1f
                     
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Box(modifier = Modifier.width(30.dp).height((heightFactor * 100).coerceAtLeast(10f).dp).clip(RoundedCornerShape(4.dp)).background(colors[index % colors.size]))
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+                        Text(text = "${(heightFactor * 100).toInt()}%", fontSize = 10.sp, color = GrayText)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Box(modifier = Modifier.width(30.dp).height((heightFactor * 80).coerceAtLeast(10f).dp).clip(RoundedCornerShape(4.dp)).background(colors[index % colors.size]))
                         Spacer(modifier = Modifier.height(8.dp))
-                        Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(colors[index % colors.size]))
+                        Text(text = cat, fontSize = 10.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
@@ -630,19 +645,19 @@ fun EmptyStateView(icon: ImageVector, message: String, actionText: String? = nul
 
 @Composable
 fun SpendingDonutChart(modifier: Modifier, expenses: List<Expense>) {
-    val total = expenses.sumOf { convertToVnd(it.amount, it.currency) }
+    val categoryTotals = expenses.groupBy { it.category }.mapValues { it.value.sumOf { exp -> convertToVnd(exp.amount, exp.currency) } }
+    val total = categoryTotals.values.sum()
+    val sortedEntries = categoryTotals.entries.sortedByDescending { it.value }
     
     Canvas(modifier = modifier) {
         drawArc(color = GrayBackground, startAngle = 0f, sweepAngle = 360f, useCenter = false, style = Stroke(width = 25f, cap = StrokeCap.Round))
         
         if (total > 0) {
-            val categories = listOf("Accommodation", "Food", "Transport", "Activities")
-            val colors = listOf(OrangePrimary, BluePrimary, PurplePrimary, GreenPrimary)
+            val colors = listOf(OrangePrimary, BluePrimary, PurplePrimary, GreenPrimary, Color.Magenta)
             var startAngle = -90f
 
-            categories.forEachIndexed { index, cat ->
-                val catAmount = expenses.filter { it.category == cat }.sumOf { convertToVnd(it.amount, it.currency) }
-                val sweepAngle = (catAmount / total * 360).toFloat()
+            sortedEntries.forEachIndexed { index, entry ->
+                val sweepAngle = (entry.value / total * 360).toFloat()
                 if (sweepAngle > 0) {
                     drawArc(
                         color = colors[index % colors.size],
@@ -671,11 +686,12 @@ private fun convertToVnd(amount: Double, currency: String): Double {
 }
 
 @Composable
-fun BreakdownItem(color: Color, label: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+fun BreakdownItem(color: Color, label: String, amount: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(color))
         Spacer(modifier = Modifier.width(8.dp))
-        Text(text = label, fontSize = 12.sp, color = GrayText)
+        Text(text = label, fontSize = 12.sp, color = GrayText, modifier = Modifier.weight(1f))
+        Text(text = amount, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
     }
 }
 
