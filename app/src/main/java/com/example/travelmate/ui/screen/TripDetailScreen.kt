@@ -92,9 +92,11 @@ fun TripDetailScreen(
     }
 
     if (showActivityDialog) {
+        val currentDayActivities = trip?.itinerary?.getOrNull(selectedDayIndexForActivity)?.activities ?: emptyList()
         ActivityDialog(
             dayInfo = trip?.itinerary?.getOrNull(selectedDayIndexForActivity)?.let { "Day ${it.dayNumber}" } ?: "",
             activity = editingActivity,
+            existingActivities = currentDayActivities,
             onDismiss = { 
                 showActivityDialog = false
                 editingActivity = null
@@ -763,6 +765,7 @@ fun ExpenseListItem(category: String, title: String, amount: String, icon: Image
 fun ActivityDialog(
     dayInfo: String,
     activity: TripActivity? = null,
+    existingActivities: List<TripActivity> = emptyList(),
     onDismiss: () -> Unit, 
     onConfirm: (TripActivity, ByteArray?) -> Unit
 ) {
@@ -772,6 +775,7 @@ fun ActivityDialog(
     var note by remember { mutableStateOf(activity?.note ?: "") }
     var selectedType by remember { mutableStateOf(activity?.type ?: "Sightseeing") }
     var currentImageUrl by remember { mutableStateOf(activity?.imageUrl) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
     
     var selectedImageUri by remember { mutableStateOf<android.net.Uri?>(null) }
     val context = LocalContext.current
@@ -862,14 +866,38 @@ fun ActivityDialog(
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
-                DialogTextField(label = "TIME", value = time, onValueChange = { time = it }, icon = Icons.Default.AccessTime)
+                DialogTextField(label = "TIME (HH:mm SA/CH)", value = time, onValueChange = { time = it; errorMessage = null }, icon = Icons.Default.AccessTime)
                 DialogTextField(label = "ACTIVITY NAME *", value = title, onValueChange = { title = it }, placeholder = "e.g. Visit Ha Long Cave")
                 DialogTextField(label = "LOCATION", value = location, onValueChange = { location = it }, placeholder = "e.g. Ha Long Bay")
                 DialogTextField(label = "NOTES", value = note, onValueChange = { note = it }, placeholder = "Optional notes...")
 
+                if (errorMessage != null) {
+                    Text(text = errorMessage!!, color = MaterialTheme.colorScheme.error, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                }
+
                 Spacer(modifier = Modifier.height(32.dp))
                 Button(
                     onClick = { 
+                        if (title.isEmpty()) {
+                            errorMessage = "Vui lòng nhập tên hoạt động"
+                            return@Button
+                        }
+
+                        val newTimeMinutes = parseTime(time)
+                        if (newTimeMinutes == -1) {
+                            errorMessage = "Định dạng giờ không hợp lệ (vd: 09:00 SA)"
+                            return@Button
+                        }
+
+                        val conflict = existingActivities.any { 
+                            it.id != activity?.id && parseTime(it.time) >= newTimeMinutes 
+                        }
+
+                        if (conflict) {
+                            errorMessage = "Thời gian hoạt động không được sớm hơn hoặc trùng với các hoạt động đã có"
+                            return@Button
+                        }
+
                         val imageBytes = selectedImageUri?.let { uri ->
                             context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                         }
@@ -893,6 +921,23 @@ fun ActivityDialog(
                 }
             }
         }
+    }
+}
+
+private fun parseTime(timeStr: String): Int {
+    return try {
+        val parts = timeStr.uppercase().split(" ")
+        val timeParts = parts[0].split(":")
+        var hour = timeParts[0].toInt()
+        val minute = timeParts[1].toInt()
+        val isPm = parts[1] == "CH" || parts[1] == "PM"
+        
+        if (isPm && hour < 12) hour += 12
+        if (!isPm && hour == 12) hour = 0
+        
+        hour * 60 + minute
+    } catch (e: Exception) {
+        -1
     }
 }
 

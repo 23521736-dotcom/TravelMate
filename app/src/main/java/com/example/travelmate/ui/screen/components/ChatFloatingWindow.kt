@@ -1,5 +1,7 @@
 package com.example.travelmate.ui.screen.components
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -14,9 +16,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DeleteSweep
-import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,6 +26,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -38,6 +39,7 @@ import com.example.travelmate.ui.theme.BluePrimary
 import com.example.travelmate.ui.theme.GrayBackground
 import com.example.travelmate.ui.theme.GrayText
 import com.example.travelmate.ui.viewmodel.ChatViewModel
+import com.example.travelmate.util.VoiceToTextParser
 import kotlin.math.roundToInt
 
 @Composable
@@ -49,6 +51,29 @@ fun ChatFloatingWindow(
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
     val keyboardController = LocalSoftwareKeyboardController.current
+    val context = LocalContext.current
+    val voiceParser = remember { VoiceToTextParser(context.applicationContext as android.app.Application) }
+    val voiceState by voiceParser.state.collectAsState()
+
+    var inputText by remember { mutableStateOf("") }
+    var canRecord by remember { mutableStateOf(false) }
+
+    val recordAudioLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { isGranted ->
+            canRecord = isGranted
+            if (isGranted) {
+                voiceParser.startListening()
+            }
+        }
+    )
+
+    // Append voice text to input field
+    LaunchedEffect(voiceState.spokenText) {
+        if (voiceState.spokenText.isNotEmpty()) {
+            inputText = voiceState.spokenText
+        }
+    }
 
     var offsetX by remember { mutableStateOf(0f) }
     var offsetY by remember { mutableStateOf(0f) }
@@ -197,51 +222,109 @@ fun ChatFloatingWindow(
                         color = Color.White,
                         shadowElevation = 8.dp
                     ) {
-                        var inputText by remember { mutableStateOf("") }
-                        Row(
-                            modifier = Modifier
-                                .padding(16.dp)
-                                .fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            OutlinedTextField(
-                                value = inputText,
-                                onValueChange = { inputText = it },
-                                modifier = Modifier.weight(1f),
-                                placeholder = { Text("Hỏi AI về chuyến đi của bạn...") },
-                                shape = RoundedCornerShape(24.dp),
-                                maxLines = 4,
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = BluePrimary,
-                                    unfocusedBorderColor = Color(0xFFE0E0E0),
-                                    focusedContainerColor = Color(0xFFF1F3F4),
-                                    unfocusedContainerColor = Color(0xFFF1F3F4)
-                                ),
-                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                                keyboardActions = KeyboardActions(onSend = {
-                                    if (inputText.isNotBlank() && !uiState.isLoading) {
-                                        viewModel.sendMessage(inputText)
-                                        inputText = ""
-                                        keyboardController?.hide()
-                                    }
-                                })
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            FloatingActionButton(
-                                onClick = {
-                                    if (inputText.isNotBlank() && !uiState.isLoading) {
-                                        viewModel.sendMessage(inputText)
-                                        inputText = ""
-                                        keyboardController?.hide()
-                                    }
-                                },
-                                containerColor = if (inputText.isNotBlank()) BluePrimary else Color.LightGray,
-                                contentColor = Color.White,
-                                modifier = Modifier.size(48.dp),
-                                shape = CircleShape,
-                                elevation = FloatingActionButtonDefaults.elevation(0.dp)
+                        Column {
+                            // Listening Progress/Real-time text
+                            AnimatedVisibility(
+                                visible = voiceState.isListening || voiceState.error != null,
+                                enter = fadeIn() + expandVertically(),
+                                exit = fadeOut() + shrinkVertically()
                             ) {
-                                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", modifier = Modifier.size(20.dp))
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(if (voiceState.error != null) Color.Red.copy(alpha = 0.1f) else BluePrimary.copy(alpha = 0.05f))
+                                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (voiceState.isListening) {
+                                        Icon(
+                                            Icons.Default.GraphicEq,
+                                            contentDescription = null,
+                                            tint = BluePrimary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = if (voiceState.spokenText.isEmpty()) "Đang nghe..." else voiceState.spokenText,
+                                            color = BluePrimary,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            maxLines = 1
+                                        )
+                                    } else if (voiceState.error != null) {
+                                        Icon(Icons.Default.Error, contentDescription = null, tint = Color.Red, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(text = "Lỗi micro", color = Color.Red, fontSize = 12.sp)
+                                    }
+                                }
+                            }
+
+                            Row(
+                                modifier = Modifier
+                                    .padding(16.dp)
+                                    .fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                OutlinedTextField(
+                                    value = inputText,
+                                    onValueChange = { inputText = it },
+                                    modifier = Modifier.weight(1f),
+                                    placeholder = { Text("Hỏi AI về chuyến đi của bạn...") },
+                                    shape = RoundedCornerShape(24.dp),
+                                    maxLines = 4,
+                                    trailingIcon = {
+                                        IconButton(
+                                            onClick = {
+                                                if (voiceState.isListening) {
+                                                    voiceParser.stopListening()
+                                                } else {
+                                                    if (canRecord) {
+                                                        voiceParser.startListening()
+                                                    } else {
+                                                        recordAudioLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                                                    }
+                                                }
+                                            }
+                                        ) {
+                                            Icon(
+                                                imageVector = if (voiceState.isListening) Icons.Default.Stop else Icons.Default.Mic,
+                                                contentDescription = "Voice Input",
+                                                tint = if (voiceState.isListening) Color.Red else GrayText
+                                            )
+                                        }
+                                    },
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = BluePrimary,
+                                        unfocusedBorderColor = Color(0xFFE0E0E0),
+                                        focusedContainerColor = Color(0xFFF1F3F4),
+                                        unfocusedContainerColor = Color(0xFFF1F3F4)
+                                    ),
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                                    keyboardActions = KeyboardActions(onSend = {
+                                        if (inputText.isNotBlank() && !uiState.isLoading) {
+                                            viewModel.sendMessage(inputText)
+                                            inputText = ""
+                                            keyboardController?.hide()
+                                        }
+                                    })
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                FloatingActionButton(
+                                    onClick = {
+                                        if (inputText.isNotBlank() && !uiState.isLoading) {
+                                            viewModel.sendMessage(inputText)
+                                            inputText = ""
+                                            keyboardController?.hide()
+                                        }
+                                    },
+                                    containerColor = if (inputText.isNotBlank()) BluePrimary else Color.LightGray,
+                                    contentColor = Color.White,
+                                    modifier = Modifier.size(48.dp),
+                                    shape = CircleShape,
+                                    elevation = FloatingActionButtonDefaults.elevation(0.dp)
+                                ) {
+                                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", modifier = Modifier.size(20.dp))
+                                }
                             }
                         }
                     }

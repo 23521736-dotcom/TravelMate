@@ -1,5 +1,8 @@
 package com.example.travelmate.ui.screen
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -15,15 +18,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import com.example.travelmate.TravelMateApp
 import com.example.travelmate.domain.model.Destination
 import com.example.travelmate.ui.theme.*
 import com.example.travelmate.ui.viewmodel.AuthViewModel
 import com.example.travelmate.ui.viewmodel.ExploreViewModel
+import com.example.travelmate.util.VoiceToTextParser
 
 @Composable
 fun ExploreScreen(
@@ -34,7 +40,29 @@ fun ExploreScreen(
     val uiState by viewModel.uiState.collectAsState()
     val authUiState by authViewModel.uiState.collectAsState()
     val wishlistIds = authUiState.user?.wishlistIds ?: emptyList()
-    
+
+    val context = LocalContext.current
+    val voiceParser = remember { VoiceToTextParser(context.applicationContext as android.app.Application) }
+    val voiceState by voiceParser.state.collectAsState()
+
+    var canRecord by remember { mutableStateOf(false) }
+    val recordAudioLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { isGranted ->
+            canRecord = isGranted
+            if (isGranted) {
+                voiceParser.startListening()
+            }
+        }
+    )
+
+    // Update search query when voice text is received
+    LaunchedEffect(voiceState.spokenText) {
+        if (voiceState.spokenText.isNotEmpty()) {
+            viewModel.onSearchQueryChange(voiceState.spokenText)
+        }
+    }
+
     val categories = uiState.categories
     val recentSearches = listOf("Da Lat flowers", "Hanoi street food", "Sa Pa trekking")
 
@@ -55,7 +83,27 @@ fun ExploreScreen(
                 onValueChange = { viewModel.onSearchQueryChange(it) },
                 placeholder = { Text("Tìm kiếm điểm đến, địa danh...", fontSize = 14.sp) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = GrayText) },
-                trailingIcon = { Icon(Icons.Default.Mic, contentDescription = null, tint = GrayText) },
+                trailingIcon = {
+                    IconButton(
+                        onClick = {
+                            if (voiceState.isListening) {
+                                voiceParser.stopListening()
+                            } else {
+                                if (canRecord) {
+                                    voiceParser.startListening()
+                                } else {
+                                    recordAudioLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                                }
+                            }
+                        }
+                    ) {
+                        Icon(
+                            imageVector = if (voiceState.isListening) Icons.Default.Stop else Icons.Default.Mic,
+                            contentDescription = "Voice Search",
+                            tint = if (voiceState.isListening) Color.Red else BluePrimary
+                        )
+                    }
+                },
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(16.dp),
                 colors = OutlinedTextFieldDefaults.colors(
@@ -67,6 +115,45 @@ fun ExploreScreen(
                     focusedTextColor = MaterialTheme.colorScheme.onSurface
                 )
             )
+        }
+
+        // Voice Status Overlay
+        AnimatedVisibility(
+            visible = voiceState.isListening || voiceState.error != null,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                color = if (voiceState.error != null) Color.Red.copy(alpha = 0.1f) else BluePrimary.copy(alpha = 0.1f),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (voiceState.isListening) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = BluePrimary
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = if (voiceState.spokenText.isEmpty()) "Đang lắng nghe..." else voiceState.spokenText,
+                            fontSize = 14.sp,
+                            color = BluePrimary,
+                            fontWeight = FontWeight.Medium
+                        )
+                    } else if (voiceState.error != null) {
+                        Icon(Icons.Default.Error, contentDescription = null, tint = Color.Red, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(text = voiceState.error!!, fontSize = 14.sp, color = Color.Red)
+                    }
+                }
+            }
         }
 
         LazyColumn(

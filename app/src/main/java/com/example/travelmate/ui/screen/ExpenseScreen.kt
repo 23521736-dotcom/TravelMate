@@ -255,27 +255,111 @@ fun BudgetOverviewCard(spent: Double, budget: Double, threshold: Int) {
 
 @Composable
 fun ExpenseChartCard(expenses: List<Expense>) {
+    val categoryTotals = getCategoryTotals(expenses)
+    val total = categoryTotals.values.sum()
+    val colors = listOf(BluePrimary, OrangePrimary, PurplePrimary, GreenPrimary, Color.Magenta, Color.Cyan)
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(24.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, GrayBorder.copy(alpha = 0.5f)),
         color = MaterialTheme.colorScheme.surface
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
-            Text(text = "Phân bổ chi tiêu", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+            Text(
+                text = "Phân bổ chi tiêu",
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                color = MaterialTheme.colorScheme.onSurface
+            )
             Spacer(modifier = Modifier.height(24.dp))
             
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                DonutChart(modifier = Modifier.size(140.dp), expenses = expenses)
-                Spacer(modifier = Modifier.width(24.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    val categoryData = getCategoryBreakdown(expenses)
-                    categoryData.take(4).forEach { (category, color) ->
-                        ChartLegendItem(color = color, label = category)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    DonutChart(modifier = Modifier.size(160.dp), expenses = expenses)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(text = "Tổng cộng", fontSize = 12.sp, color = GrayText)
+                        Text(
+                            text = String.format(Locale.US, "%,.0f đ", total),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(32.dp))
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    val sortedCategories = categoryTotals.entries.sortedByDescending { it.value }
+                    sortedCategories.take(5).forEachIndexed { index, entry ->
+                        val percent = (entry.value / total * 100).toInt()
+                        ChartLegendItem(
+                            color = colors[index % colors.size],
+                            label = entry.key,
+                            percent = "$percent%"
+                        )
                     }
                 }
             }
+            
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            // Detailed Breakdown
+            Divider(color = GrayBorder.copy(alpha = 0.3f))
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            Text(text = "Chi tiết theo hạng mục", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = GrayText)
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            categoryTotals.entries.sortedByDescending { it.value }.forEach { entry ->
+                CategoryBreakdownRow(
+                    category = entry.key,
+                    amount = entry.value,
+                    percent = entry.value / total
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
         }
+    }
+}
+
+@Composable
+fun CategoryBreakdownRow(category: String, amount: Double, percent: Double) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(
+                        when(category) {
+                            "Food" -> BluePrimary
+                            "Accommodation" -> OrangePrimary
+                            "Transport" -> GreenPrimary
+                            "Activities" -> PurplePrimary
+                            else -> GrayText
+                        }
+                    )
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(text = category, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
+        }
+        Text(
+            text = String.format(Locale.US, "%,.0f đ (%.0f%%)", amount, percent * 100),
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
     }
 }
 
@@ -286,7 +370,13 @@ fun DonutChart(modifier: Modifier, expenses: List<Expense>) {
     val colors = listOf(BluePrimary, OrangePrimary, PurplePrimary, GreenPrimary, Color.Magenta, Color.Cyan)
 
     Canvas(modifier = modifier) {
-        drawArc(color = GrayBackground, startAngle = 0f, sweepAngle = 360f, useCenter = false, style = Stroke(width = 30f, cap = StrokeCap.Round))
+        drawArc(
+            color = GrayBackground,
+            startAngle = 0f,
+            sweepAngle = 360f,
+            useCenter = false,
+            style = Stroke(width = 35f, cap = StrokeCap.Round)
+        )
         
         if (total > 0) {
             var startAngle = -90f
@@ -298,7 +388,7 @@ fun DonutChart(modifier: Modifier, expenses: List<Expense>) {
                         startAngle = startAngle,
                         sweepAngle = sweepAngle,
                         useCenter = false,
-                        style = Stroke(width = 30f, cap = StrokeCap.Round)
+                        style = Stroke(width = 35f, cap = StrokeCap.Round)
                     )
                     startAngle += sweepAngle
                 }
@@ -308,11 +398,18 @@ fun DonutChart(modifier: Modifier, expenses: List<Expense>) {
 }
 
 @Composable
-fun ChartLegendItem(color: Color, label: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(color))
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(text = label, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
+fun ChartLegendItem(color: Color, label: String, percent: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(color))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(text = label, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+        }
+        Text(text = percent, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = BluePrimary)
     }
 }
 

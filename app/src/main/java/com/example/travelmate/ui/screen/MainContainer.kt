@@ -113,6 +113,7 @@ fun MainContainer(
                 NavItem.Home.route -> HomeScreen(
                     onProfileClick = { selectedScreen = NavItem.Profile.route },
                     onNotificationsClick = onNotificationsClick,
+                    onSearchClick = { selectedScreen = NavItem.Explore.route },
                     onDestinationClick = onDestinationClick,
                     onTripClick = onTripClick,
                     authViewModel = authViewModel

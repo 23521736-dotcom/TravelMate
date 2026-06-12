@@ -22,6 +22,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.travelmate.ui.theme.*
 import com.example.travelmate.ui.viewmodel.TripDetailViewModel
 
+import androidx.compose.ui.platform.LocalContext
+import java.text.SimpleDateFormat
+import java.util.*
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun EditTripScreen(
@@ -32,6 +36,7 @@ fun EditTripScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val trip = uiState.trip
+    val context = LocalContext.current
 
     LaunchedEffect(tripId) {
         viewModel.getTrip(tripId)
@@ -42,6 +47,12 @@ fun EditTripScreen(
     var budget by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("upcoming") }
     var description by remember { mutableStateOf("") }
+    var startDate by remember { mutableStateOf("") }
+    var endDate by remember { mutableStateOf("") }
+    
+    var showWarningDialog by remember { mutableStateOf(false) }
+    var lostDaysCount by remember { mutableIntStateOf(0) }
+    var lostActivitiesCount by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(trip) {
         trip?.let {
@@ -50,7 +61,34 @@ fun EditTripScreen(
             budget = it.budgetAmount.toInt().toString()
             status = it.status
             description = it.description
+            val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.US)
+            startDate = if (it.startDate > 0) sdf.format(Date(it.startDate)) else ""
+            endDate = if (it.endDate > 0) sdf.format(Date(it.endDate)) else ""
         }
+    }
+
+    if (showWarningDialog) {
+        AlertDialog(
+            onDismissRequest = { showWarningDialog = false },
+            title = { Text("Cảnh báo mất dữ liệu") },
+            text = { Text("Việc thay đổi ngày sẽ làm mất $lostDaysCount ngày đã có $lostActivitiesCount hoạt động. Bạn có chắc chắn muốn tiếp tục?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        performUpdate(trip, tripName, destination, budget, status, description, startDate, endDate, viewModel, onSaveClick)
+                        showWarningDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                ) {
+                    Text("Tiếp tục")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showWarningDialog = false }) {
+                    Text("Hủy")
+                }
+            }
+        )
     }
 
     Column(
@@ -88,6 +126,29 @@ fun EditTripScreen(
             EditField(label = "DESTINATION", value = destination, onValueChange = { destination = it })
             EditField(label = "BUDGET (VND)", value = budget, onValueChange = { budget = it })
 
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("START DATE", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = GrayText, modifier = Modifier.padding(bottom = 8.dp))
+                    OutlinedButton(
+                        onClick = { showDatePicker(context) { startDate = it } },
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(startDate.ifEmpty { "DD/MM/YYYY" }, color = if (startDate.isEmpty()) GrayText else MaterialTheme.colorScheme.onSurface)
+                    }
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("END DATE", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = GrayText, modifier = Modifier.padding(bottom = 8.dp))
+                    OutlinedButton(
+                        onClick = { showDatePicker(context) { endDate = it } },
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(endDate.ifEmpty { "DD/MM/YYYY" }, color = if (endDate.isEmpty()) GrayText else MaterialTheme.colorScheme.onSurface)
+                    }
+                }
+            }
+
             Text(text = "STATUS", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = GrayText, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
             androidx.compose.foundation.layout.FlowRow(
                 modifier = Modifier.fillMaxWidth(),
@@ -119,17 +180,36 @@ fun EditTripScreen(
         // Save Button
         Button(
             onClick = {
-                val updatedTrip = trip?.copy(
-                    name = tripName,
-                    destination = destination,
-                    budgetAmount = budget.toDoubleOrNull() ?: 0.0,
-                    status = status,
-                    description = description
-                )
-                if (updatedTrip != null) {
-                    viewModel.updateTrip(updatedTrip) {
-                        onSaveClick()
+                if (trip != null) {
+                    val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.US)
+                    val newStart = try { sdf.parse(startDate)?.time ?: 0L } catch (e: Exception) { 0L }
+                    val newEnd = try { sdf.parse(endDate)?.time ?: 0L } catch (e: Exception) { 0L }
+                    
+                    if (newStart > 0 && newEnd > 0) {
+                        val diff = newEnd - newStart
+                        val newDuration = (diff / (1000 * 60 * 60 * 24)).toInt() + 1
+                        
+                        if (newDuration < trip.durationDays) {
+                            var lostDays = 0
+                            var lostActs = 0
+                            for (i in newDuration until trip.itinerary.size) {
+                                val day = trip.itinerary[i]
+                                if (day.activities.isNotEmpty()) {
+                                    lostDays++
+                                    lostActs += day.activities.size
+                                }
+                            }
+                            
+                            if (lostActs > 0) {
+                                lostDaysCount = lostDays
+                                lostActivitiesCount = lostActs
+                                showWarningDialog = true
+                                return@Button
+                            }
+                        }
                     }
+                    
+                    performUpdate(trip, tripName, destination, budget, status, description, startDate, endDate, viewModel, onSaveClick)
                 }
             },
             modifier = Modifier
@@ -143,6 +223,57 @@ fun EditTripScreen(
             Spacer(modifier = Modifier.width(8.dp))
             Text(text = "Save Changes", fontWeight = FontWeight.Bold, fontSize = 16.sp)
         }
+    }
+}
+
+private fun performUpdate(
+    trip: com.example.travelmate.domain.model.Trip?,
+    name: String,
+    dest: String,
+    budget: String,
+    status: String,
+    desc: String,
+    start: String,
+    end: String,
+    viewModel: TripDetailViewModel,
+    onSuccess: () -> Unit
+) {
+    if (trip == null) return
+    
+    val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.US)
+    val newStart = try { sdf.parse(start)?.time ?: 0L } catch (e: Exception) { 0L }
+    val newEnd = try { sdf.parse(end)?.time ?: 0L } catch (e: Exception) { 0L }
+    val diff = newEnd - newStart
+    val newDuration = (diff / (1000 * 60 * 60 * 24)).toInt() + 1
+    
+    val newItinerary = mutableListOf<com.example.travelmate.domain.model.ItineraryDay>()
+    val calendar = Calendar.getInstance()
+    calendar.timeInMillis = newStart
+    
+    for (i in 0 until newDuration) {
+        val existingDay = trip.itinerary.getOrNull(i)
+        newItinerary.add(com.example.travelmate.domain.model.ItineraryDay(
+            dayNumber = i + 1,
+            date = calendar.timeInMillis,
+            activities = existingDay?.activities ?: emptyList()
+        ))
+        calendar.add(Calendar.DAY_OF_MONTH, 1)
+    }
+
+    val updatedTrip = trip.copy(
+        name = name,
+        destination = dest,
+        budgetAmount = budget.toDoubleOrNull() ?: 0.0,
+        status = status,
+        description = desc,
+        startDate = newStart,
+        endDate = newEnd,
+        durationDays = newDuration,
+        itinerary = newItinerary
+    )
+    
+    viewModel.updateTrip(updatedTrip) {
+        onSuccess()
     }
 }
 

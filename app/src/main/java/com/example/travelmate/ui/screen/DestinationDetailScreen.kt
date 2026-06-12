@@ -2,6 +2,8 @@ package com.example.travelmate.ui.screen
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
@@ -93,14 +95,27 @@ fun DestinationDetailScreen(
                 Text(text = uiState.error!!, modifier = Modifier.align(Alignment.Center), color = MaterialTheme.colorScheme.error)
             } else if (destination != null) {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                    // Image Header
+                    // Image Header with Pager
+                    val allImages = remember(destination) {
+                        val images = mutableListOf<String>()
+                        destination.coverImage?.let { images.add(it) }
+                        images.addAll(destination.imageUrls)
+                        images.distinct()
+                    }
+                    val pagerState = rememberPagerState(pageCount = { allImages.size })
+
                     Box(modifier = Modifier.fillMaxWidth().height(300.dp)) {
-                        AsyncImage(
-                            model = destination.coverImage ?: destination.imageUrls.firstOrNull(),
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
+                        HorizontalPager(
+                            state = pagerState,
+                            modifier = Modifier.fillMaxSize()
+                        ) { page ->
+                            AsyncImage(
+                                model = allImages[page],
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
                         
                         // Transparent Back Button Overlay
                         IconButton(
@@ -112,6 +127,29 @@ fun DestinationDetailScreen(
                                 .background(Color.Black.copy(alpha = 0.3f))
                         ) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = Color.White)
+                        }
+
+                        // Pager Indicator
+                        if (allImages.size > 1) {
+                            Row(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .padding(16.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color.Black.copy(alpha = 0.3f))
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                repeat(allImages.size) { index ->
+                                    val color = if (pagerState.currentPage == index) Color.White else Color.White.copy(alpha = 0.5f)
+                                    Box(
+                                        modifier = Modifier
+                                            .size(6.dp)
+                                            .clip(CircleShape)
+                                            .background(color)
+                                    )
+                                }
+                            }
                         }
                     }
 

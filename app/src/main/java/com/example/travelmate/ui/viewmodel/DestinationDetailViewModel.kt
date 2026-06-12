@@ -62,7 +62,18 @@ class DestinationDetailViewModel @Inject constructor(
         reviewsJob = viewModelScope.launch {
             reviewRepository.getReviewsForDestination(destinationId).collect { result ->
                 if (result is NetworkResult.Success) {
-                    _uiState.update { it.copy(reviews = result.data) }
+                    val reviews = result.data
+                    val avgRating = if (reviews.isNotEmpty()) reviews.map { it.rating }.average() else _uiState.value.destination?.rating ?: 0.0
+                    
+                    _uiState.update { state -> 
+                        state.copy(
+                            reviews = reviews,
+                            destination = state.destination?.copy(
+                                rating = avgRating,
+                                reviewCount = reviews.size
+                            )
+                        ) 
+                    }
                 }
             }
         }

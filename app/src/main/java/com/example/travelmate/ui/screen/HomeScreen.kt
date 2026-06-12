@@ -40,6 +40,7 @@ import java.util.Locale
 fun HomeScreen(
     onProfileClick: () -> Unit,
     onNotificationsClick: () -> Unit,
+    onSearchClick: () -> Unit,
     onDestinationClick: (String) -> Unit,
     onTripClick: (String) -> Unit,
     viewModel: HomeViewModel = hiltViewModel(),
@@ -60,7 +61,7 @@ fun HomeScreen(
             .verticalScroll(rememberScrollState())
     ) {
         // Header & Search Area
-        HomeHeader(user?.fullName ?: "Guest", onProfileClick, onNotificationsClick)
+        HomeHeader(user?.fullName ?: "Guest", onProfileClick, onNotificationsClick, onSearchClick)
 
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
             // Promo Card
@@ -151,7 +152,7 @@ fun HomeScreen(
 }
 
 @Composable
-fun HomeHeader(userName: String, onProfileClick: () -> Unit, onNotificationsClick: () -> Unit) {
+fun HomeHeader(userName: String, onProfileClick: () -> Unit, onNotificationsClick: () -> Unit, onSearchClick: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -186,25 +187,30 @@ fun HomeHeader(userName: String, onProfileClick: () -> Unit, onNotificationsClic
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Search Bar
-        OutlinedTextField(
-            value = "",
-            onValueChange = {},
-            placeholder = { Text("Tìm điểm đến, hoạt động...", fontSize = 14.sp) },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = GrayText) },
-            trailingIcon = { Icon(Icons.Default.Tune, contentDescription = null, tint = BluePrimary) },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                unfocusedBorderColor = GrayBorder.copy(alpha = 0.5f),
-                focusedBorderColor = BluePrimary,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                focusedContainerColor = MaterialTheme.colorScheme.surface,
-                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                focusedTextColor = MaterialTheme.colorScheme.onSurface
-            ),
-            readOnly = true
-        )
+        // Search Bar (Clickable)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onSearchClick() }
+        ) {
+            OutlinedTextField(
+                value = "",
+                onValueChange = {},
+                placeholder = { Text("Tìm điểm đến, hoạt động...", fontSize = 14.sp) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = GrayText) },
+                trailingIcon = { Icon(Icons.Default.Tune, contentDescription = null, tint = BluePrimary) },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = false, // Disable typing, make it a button
+                shape = RoundedCornerShape(16.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    disabledBorderColor = GrayBorder.copy(alpha = 0.5f),
+                    disabledPlaceholderColor = GrayText,
+                    disabledLeadingIconColor = GrayText,
+                    disabledTrailingIconColor = BluePrimary,
+                    disabledContainerColor = MaterialTheme.colorScheme.surface
+                )
+            )
+        }
     }
 }
 
