@@ -48,9 +48,8 @@ class DestinationDetailViewModel @Inject constructor(
                     }
                     is NetworkResult.Success -> {
                         _uiState.update { it.copy(isLoading = false, destination = result.data, error = null) }
-                        if (reviewsJob?.isActive != true) {
-                            getReviews(id)
-                        }
+                        // Fetch reviews immediately after destination is loaded successfully
+                        getReviews(id)
                     }
                     is NetworkResult.Error -> _uiState.update { it.copy(isLoading = false, error = result.message) }
                 }
@@ -59,13 +58,14 @@ class DestinationDetailViewModel @Inject constructor(
     }
 
     private fun getReviews(destinationId: String) {
+        // Cancel existing job if any to ensure fresh data
+        reviewsJob?.cancel()
         reviewsJob = viewModelScope.launch {
             reviewRepository.getReviewsForDestination(destinationId).collect { result ->
                 if (result is NetworkResult.Success) {
                     val reviews = result.data
-                    val avgRating = if (reviews.isNotEmpty()) reviews.map { it.rating }.average() else _uiState.value.destination?.rating ?: 0.0
-                    
                     _uiState.update { state -> 
+                        val avgRating = if (reviews.isNotEmpty()) reviews.map { it.rating }.average() else state.destination?.rating ?: 0.0
                         state.copy(
                             reviews = reviews,
                             destination = state.destination?.copy(

@@ -22,12 +22,19 @@ data class Trip(
     @get:PropertyName("coverImageUrl") @set:PropertyName("coverImageUrl") var coverImageUrl: String = "",
     @get:PropertyName("galleryUrls") @set:PropertyName("galleryUrls") var galleryUrls: List<String> = emptyList(),
     @get:PropertyName("itinerary") @set:PropertyName("itinerary") var itinerary: List<ItineraryDay> = emptyList(),
+    @get:PropertyName("visibility") @set:PropertyName("visibility") var visibility: String = VISIBILITY_PRIVATE,
+    @get:PropertyName("shareToken") @set:PropertyName("shareToken") var shareToken: String = "",
+    @get:PropertyName("inviteCode") @set:PropertyName("inviteCode") var inviteCode: String = "",
     @get:PropertyName("createdAt") @set:PropertyName("createdAt") var createdAt: Long = System.currentTimeMillis()
 ) {
     companion object {
         const val STATUS_UPCOMING = "upcoming"
         const val STATUS_ONGOING = "ongoing"
         const val STATUS_COMPLETED = "completed"
+
+        const val VISIBILITY_PRIVATE = "private"
+        const val VISIBILITY_LINK = "link"
+        const val VISIBILITY_PUBLIC = "public"
 
         fun getTripStatus(startDate: Long, endDate: Long): String {
             val now = System.currentTimeMillis()

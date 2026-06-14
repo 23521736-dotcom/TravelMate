@@ -28,6 +28,7 @@ import java.util.Locale
 @Composable
 fun MyTripsScreen(
     onAddTripClick: () -> Unit,
+    onJoinTripClick: () -> Unit,
     onTripClick: (String) -> Unit,
     viewModel: TripViewModel = hiltViewModel()
 ) {
@@ -61,14 +62,18 @@ fun MyTripsScreen(
                 IconButton(onClick = { viewModel.refreshTrips() }) {
                     Icon(Icons.Default.Refresh, contentDescription = null, tint = GrayText)
                 }
-                FloatingActionButton(
+                IconButton(onClick = onJoinTripClick) {
+                    Icon(Icons.Default.GroupAdd, contentDescription = "Join Trip", tint = BluePrimary)
+                }
+                Surface(
                     onClick = onAddTripClick,
-                    containerColor = BluePrimary,
-                    contentColor = Color.White,
                     modifier = Modifier.size(40.dp),
-                    shape = CircleShape
+                    shape = CircleShape,
+                    color = BluePrimary
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = null)
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.Add, contentDescription = null, tint = Color.White)
+                    }
                 }
             }
         }
@@ -149,6 +154,9 @@ fun MyTripsScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     items(filteredTrips) { trip ->
+                        // Get role for the current user
+                        val currentUserMember = uiState.tripsWithRoles.find { it.first.id == trip.id }?.second
+                        
                         DetailedTripCard(
                             title = trip.name,
                             location = trip.destination,
@@ -162,6 +170,7 @@ fun MyTripsScreen(
                             duration = "${trip.durationDays} ngày",
                             budget = String.format(Locale.US, "%,.0f %s", trip.budgetAmount, trip.currency),
                             coverImageUrl = trip.coverImageUrl,
+                            badge = currentUserMember?.role,
                             onClick = { onTripClick(trip.id) }
                         )
                     }

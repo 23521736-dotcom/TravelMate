@@ -45,6 +45,7 @@ fun MainContainer(
     onDestinationClick: (String) -> Unit,
     onNotificationsClick: () -> Unit,
     onSettingsClick: () -> Unit,
+    onJoinTripClick: () -> Unit,
     authViewModel: AuthViewModel = hiltViewModel()
 ) {
     var selectedScreen by rememberSaveable { mutableStateOf<String>(NavItem.Home.route) }
@@ -122,7 +123,11 @@ fun MainContainer(
                     onDestinationClick = onDestinationClick,
                     authViewModel = authViewModel
                 )
-                NavItem.Trips.route -> MyTripsScreen(onAddTripClick = onPlanTripClick, onTripClick = onTripClick)
+                NavItem.Trips.route -> MyTripsScreen(
+                    onAddTripClick = onPlanTripClick, 
+                    onJoinTripClick = onJoinTripClick,
+                    onTripClick = onTripClick
+                )
                 NavItem.Expense.route -> ExpenseScreen(onAddExpenseClick = { onAddExpenseClick() })
                 NavItem.Profile.route -> ProfileScreen(
                     onEditProfileClick = onEditProfileClick,

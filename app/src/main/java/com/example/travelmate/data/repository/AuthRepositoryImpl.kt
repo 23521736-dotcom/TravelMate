@@ -125,7 +125,7 @@ class AuthRepositoryImpl @Inject constructor(
         if (!snapshot.exists()) {
             return User(uid = uid, email = firebaseAuth.currentUser?.email ?: "", fullName = "Thành viên mới")
         }
-        
+
         val interestsList = mutableListOf<Category>()
         snapshot.child("interests").children.forEach { child ->
             child.getValue(String::class.java)?.let { categoryName ->
@@ -371,10 +371,12 @@ class AuthRepositoryImpl @Inject constructor(
 
     override suspend fun getCurrentUser(): User? {
         return try {
-            withTimeoutOrNull(3000) {
+            // Short timeout to prevent blocking startup if DataStore is hanging
+            withTimeoutOrNull(2000) {
                 preferenceDataStore.currentUser.first()
             }
         } catch (e: Exception) {
+            android.util.Log.e("AuthRepository", "Error getting current user from DataStore", e)
             null
         }
     }

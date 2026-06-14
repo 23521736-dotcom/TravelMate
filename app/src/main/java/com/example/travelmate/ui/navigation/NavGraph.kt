@@ -140,6 +140,19 @@ fun NavGraph(
                     },
                     onSettingsClick = {
                         navController.navigate(Screen.Settings.route)
+                    },
+                    onJoinTripClick = {
+                        navController.navigate(Screen.JoinTrip.route)
+                    }
+                )
+            }
+            composable(Screen.JoinTrip.route) {
+                JoinTripScreen(
+                    onBackClick = { navController.popBackStack() },
+                    onJoinSuccess = { tripId ->
+                        navController.navigate(Screen.TripDetail.createRoute(tripId)) {
+                            popUpTo(Screen.JoinTrip.route) { inclusive = true }
+                        }
                     }
                 )
             }
@@ -189,8 +202,30 @@ fun NavGraph(
                     tripId = tripId,
                     onBackClick = { navController.popBackStack() },
                     onEditClick = { navController.navigate(Screen.EditTrip.createRoute(tripId)) },
+                    onManageMembersClick = { navController.navigate(Screen.ManageMembers.createRoute(tripId)) },
+                    onHistoryClick = { navController.navigate(Screen.TripHistory.createRoute(tripId)) },
                     onAddExpenseClick = { navController.navigate(Screen.AddExpense.createRoute(tripId)) },
                     onDeleteTripSuccess = { navController.popBackStack(Screen.Main.route, false) }
+                )
+            }
+            composable(
+                route = Screen.ManageMembers.route,
+                arguments = listOf(navArgument("tripId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val tripId = backStackEntry.arguments?.getString("tripId") ?: ""
+                ManageMembersScreen(
+                    tripId = tripId,
+                    onBackClick = { navController.popBackStack() }
+                )
+            }
+            composable(
+                route = Screen.TripHistory.route,
+                arguments = listOf(navArgument("tripId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val tripId = backStackEntry.arguments?.getString("tripId") ?: ""
+                TripHistoryScreen(
+                    tripId = tripId,
+                    onBackClick = { navController.popBackStack() }
                 )
             }
             composable(
@@ -254,7 +289,7 @@ fun NavGraph(
                     onActionClick = { type, id ->
                         if (id != null) {
                             when(type) {
-                                "trip_start", "budget" -> navController.navigate(Screen.TripDetail.createRoute(id))
+                                "trip_start", "budget", "role_change" -> navController.navigate(Screen.TripDetail.createRoute(id))
                                 "destination" -> navController.navigate(Screen.DestinationDetail.createRoute(id))
                                 "explore", "promotion" -> {
                                     if (id.startsWith("landmark_")) {

@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.travelmate.ui.theme.*
 import com.example.travelmate.ui.viewmodel.AddExpenseViewModel
+import com.example.travelmate.ui.viewmodel.TripDetailViewModel
 import java.text.SimpleDateFormat
 import java.util.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -37,10 +38,29 @@ fun AddExpenseScreen(
     tripId: String?,
     onBackClick: () -> Unit,
     onSaveClick: () -> Unit,
-    viewModel: AddExpenseViewModel = hiltViewModel()
+    viewModel: AddExpenseViewModel = hiltViewModel(),
+    tripDetailViewModel: TripDetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val tripDetailState by tripDetailViewModel.uiState.collectAsState()
     val keyboardController = LocalSoftwareKeyboardController.current
+    
+    // Fetch trip detail to check permissions if tripId is provided
+    LaunchedEffect(tripId) {
+        if (tripId != null) {
+            tripDetailViewModel.getTrip(tripId)
+        }
+    }
+
+    // Permission check
+    val canEdit = remember(tripId, tripDetailState.currentUserMember) {
+        if (tripId == null) true // Personal expense
+        else {
+            val role = tripDetailState.currentUserMember?.role
+            role == com.example.travelmate.domain.model.TripMember.ROLE_OWNER || 
+            role == com.example.travelmate.domain.model.TripMember.ROLE_EDITOR
+        }
+    }
     var amount by remember { mutableStateOf("0") }
     var selectedCurrency by remember { mutableStateOf("VND") }
     var selectedCategory by remember { mutableStateOf("Food") }
@@ -110,7 +130,7 @@ fun AddExpenseScreen(
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
                 shape = RoundedCornerShape(12.dp),
-                enabled = !uiState.isLoading
+                enabled = !uiState.isLoading && canEdit
             ) {
                 Text(text = "Lưu", color = Color.White, fontWeight = FontWeight.Bold)
             }
@@ -310,6 +330,15 @@ fun AddExpenseScreen(
                 Text(text = uiState.error!!, color = Color.Red, fontSize = 12.sp, modifier = Modifier.padding(top = 12.dp))
             }
 
+            if (!canEdit) {
+                Text(
+                    text = "Bạn không có quyền thêm chi tiêu cho chuyến đi này.",
+                    color = Color.Red,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 12.dp)
+                )
+            }
+
             Spacer(modifier = Modifier.height(32.dp))
 
             Button(
@@ -320,7 +349,7 @@ fun AddExpenseScreen(
                 modifier = Modifier.fillMaxWidth().height(58.dp),
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
-                enabled = !uiState.isLoading
+                enabled = !uiState.isLoading && canEdit
             ) {
                 if (uiState.isLoading) {
                     CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))

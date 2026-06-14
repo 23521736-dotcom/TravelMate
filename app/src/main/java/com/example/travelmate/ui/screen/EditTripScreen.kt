@@ -16,11 +16,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.travelmate.ui.theme.*
 import com.example.travelmate.ui.viewmodel.TripDetailViewModel
+import com.example.travelmate.ui.screen.components.DetailCard
+import com.example.travelmate.ui.screen.components.StatusChip
+import com.example.travelmate.ui.screen.components.showDatePicker
 
 import androidx.compose.ui.platform.LocalContext
 import java.text.SimpleDateFormat
@@ -37,6 +41,16 @@ fun EditTripScreen(
     val uiState by viewModel.uiState.collectAsState()
     val trip = uiState.trip
     val context = LocalContext.current
+
+    // Permission check
+    val isOwner = remember(uiState.currentUserMember) {
+        uiState.currentUserMember?.role == com.example.travelmate.domain.model.TripMember.ROLE_OWNER
+    }
+    val canEdit = remember(uiState.currentUserMember) {
+        val role = uiState.currentUserMember?.role
+        role == com.example.travelmate.domain.model.TripMember.ROLE_OWNER || 
+        role == com.example.travelmate.domain.model.TripMember.ROLE_EDITOR
+    }
 
     LaunchedEffect(tripId) {
         viewModel.getTrip(tripId)
@@ -126,6 +140,37 @@ fun EditTripScreen(
             EditField(label = "DESTINATION", value = destination, onValueChange = { destination = it })
             EditField(label = "BUDGET (VND)", value = budget, onValueChange = { budget = it })
 
+            Text(text = "VISIBILITY", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = GrayText, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                val visOptions = listOf(
+                    com.example.travelmate.domain.model.Trip.VISIBILITY_PRIVATE to "Riêng tư",
+                    com.example.travelmate.domain.model.Trip.VISIBILITY_LINK to "Qua link",
+                    com.example.travelmate.domain.model.Trip.VISIBILITY_PUBLIC to "Công khai"
+                )
+                visOptions.forEach { (value, label) ->
+                    StatusChip(label, trip?.visibility == value) {
+                        if (isOwner) {
+                            trip?.let { viewModel.updateTrip(it.copy(visibility = value)) {} }
+                        }
+                    }
+                }
+            }
+
+            if (trip?.visibility != com.example.travelmate.domain.model.Trip.VISIBILITY_PRIVATE) {
+                Text(text = "SHARING", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = GrayText, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
+                DetailCard {
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(text = "Mã mời: ", fontWeight = FontWeight.Bold)
+                            Text(text = trip?.inviteCode ?: "---", color = BluePrimary)
+                        }
+                        Text(text = "Link chia sẻ: travelmate://join?token=${trip?.shareToken}", fontSize = 11.sp, color = GrayText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text("START DATE", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = GrayText, modifier = Modifier.padding(bottom = 8.dp))
@@ -178,50 +223,60 @@ fun EditTripScreen(
         }
 
         // Save Button
-        Button(
-            onClick = {
-                if (trip != null) {
-                    val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.US)
-                    val newStart = try { sdf.parse(startDate)?.time ?: 0L } catch (e: Exception) { 0L }
-                    val newEnd = try { sdf.parse(endDate)?.time ?: 0L } catch (e: Exception) { 0L }
-                    
-                    if (newStart > 0 && newEnd > 0) {
-                        val diff = newEnd - newStart
-                        val newDuration = (diff / (1000 * 60 * 60 * 24)).toInt() + 1
+        if (canEdit) {
+            Button(
+                onClick = {
+                    if (trip != null) {
+                        val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.US)
+                        val newStart = try { sdf.parse(startDate)?.time ?: 0L } catch (e: Exception) { 0L }
+                        val newEnd = try { sdf.parse(endDate)?.time ?: 0L } catch (e: Exception) { 0L }
                         
-                        if (newDuration < trip.durationDays) {
-                            var lostDays = 0
-                            var lostActs = 0
-                            for (i in newDuration until trip.itinerary.size) {
-                                val day = trip.itinerary[i]
-                                if (day.activities.isNotEmpty()) {
-                                    lostDays++
-                                    lostActs += day.activities.size
+                        if (newStart > 0 && newEnd > 0) {
+                            val diff = newEnd - newStart
+                            val newDuration = (diff / (1000 * 60 * 60 * 24)).toInt() + 1
+                            
+                            if (newDuration < trip.durationDays) {
+                                var lostDays = 0
+                                var lostActs = 0
+                                for (i in newDuration until trip.itinerary.size) {
+                                    val day = trip.itinerary[i]
+                                    if (day.activities.isNotEmpty()) {
+                                        lostDays++
+                                        lostActs += day.activities.size
+                                    }
+                                }
+                                
+                                if (lostActs > 0) {
+                                    lostDaysCount = lostDays
+                                    lostActivitiesCount = lostActs
+                                    showWarningDialog = true
+                                    return@Button
                                 }
                             }
-                            
-                            if (lostActs > 0) {
-                                lostDaysCount = lostDays
-                                lostActivitiesCount = lostActs
-                                showWarningDialog = true
-                                return@Button
-                            }
                         }
+                        
+                        performUpdate(trip, tripName, destination, budget, status, description, startDate, endDate, viewModel, onSaveClick)
                     }
-                    
-                    performUpdate(trip, tripName, destination, budget, status, description, startDate, endDate, viewModel, onSaveClick)
-                }
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp)
-                .height(56.dp),
-            shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = BluePrimary)
-        ) {
-            Icon(Icons.Default.Check, contentDescription = null)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(text = "Save Changes", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp)
+                    .height(56.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = BluePrimary)
+            ) {
+                Icon(Icons.Default.Check, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(text = "Save Changes", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            }
+        } else {
+            Text(
+                text = "Bạn không có quyền chỉnh sửa thông tin chuyến đi này.",
+                color = Color.Red,
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(24.dp)
+            )
         }
     }
 }
@@ -291,35 +346,5 @@ fun EditField(label: String, value: String, onValueChange: (String) -> Unit, mod
                 focusedBorderColor = BluePrimary
             )
         )
-    }
-}
-
-@Composable
-fun StatusChip(text: String, isSelected: Boolean, onClick: () -> Unit) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(12.dp),
-        color = if (isSelected) GreenLight else Color.White,
-        border = androidx.compose.foundation.BorderStroke(1.dp, if (isSelected) GreenPrimary else GrayBorder),
-        modifier = Modifier.padding(bottom = 8.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(if (isSelected) GreenPrimary else GrayText)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = text,
-                color = if (isSelected) GreenPrimary else GrayText,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
     }
 }

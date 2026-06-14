@@ -20,22 +20,34 @@ class ReviewRepositoryImpl @Inject constructor(
     private val reviewsRef = database.getReference("reviews")
 
     override fun getReviewsForDestination(destinationId: String): Flow<NetworkResult<List<Review>>> = callbackFlow {
+        android.util.Log.d("ReviewRepo", "Fetching reviews for destination: $destinationId")
         trySend(NetworkResult.Loading)
+        
+        // Use single listener instead of real-time if preferred, or keep real-time
         val listener = reviewsRef.child(destinationId).addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 try {
                     val reviews = mutableListOf<Review>()
-                    snapshot.children.forEach { child ->
-                        child.getValue(Review::class.java)?.let { reviews.add(it) }
+                    if (snapshot.exists()) {
+                        snapshot.children.forEach { child ->
+                            try {
+                                child.getValue(Review::class.java)?.let { reviews.add(it) }
+                            } catch (e: Exception) {
+                                android.util.Log.e("ReviewRepo", "Error parsing review: ${e.message}")
+                            }
+                        }
                     }
+                    android.util.Log.d("ReviewRepo", "Successfully fetched ${reviews.size} reviews")
                     trySend(NetworkResult.Success(reviews.sortedByDescending { it.createdAt }))
                 } catch (e: Exception) {
-                    trySend(NetworkResult.Error("Lỗi nạp đánh giá: ${e.message}"))
+                    android.util.Log.e("ReviewRepo", "Error processing reviews: ${e.message}")
+                    trySend(NetworkResult.Error("Lỗi xử lý dữ liệu đánh giá"))
                 }
             }
 
             override fun onCancelled(error: DatabaseError) {
-                trySend(NetworkResult.Error(error.message))
+                android.util.Log.e("ReviewRepo", "Firebase error: ${error.message}")
+                trySend(NetworkResult.Error("Lỗi kết nối Firebase"))
             }
         })
         awaitClose { reviewsRef.child(destinationId).removeEventListener(listener) }

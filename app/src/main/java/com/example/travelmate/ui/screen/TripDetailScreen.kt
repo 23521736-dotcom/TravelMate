@@ -51,6 +51,7 @@ import com.example.travelmate.domain.model.ItineraryDay
 import com.example.travelmate.domain.model.TripActivity
 import com.example.travelmate.ui.theme.*
 import com.example.travelmate.ui.viewmodel.TripDetailViewModel
+import com.example.travelmate.ui.screen.components.DetailCard
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -59,6 +60,8 @@ fun TripDetailScreen(
     tripId: String,
     onBackClick: () -> Unit,
     onEditClick: () -> Unit,
+    onManageMembersClick: () -> Unit,
+    onHistoryClick: () -> Unit,
     onAddExpenseClick: () -> Unit,
     onDeleteTripSuccess: () -> Unit,
     viewModel: TripDetailViewModel = hiltViewModel()
@@ -66,7 +69,25 @@ fun TripDetailScreen(
     val uiState by viewModel.uiState.collectAsState()
     val trip = uiState.trip
     val context = LocalContext.current
+
+    // Permission check (Observing state reactively)
+    val canEdit = remember(uiState.currentUserMember) {
+        val role = uiState.currentUserMember?.role
+        role == com.example.travelmate.domain.model.TripMember.ROLE_OWNER || 
+        role == com.example.travelmate.domain.model.TripMember.ROLE_EDITOR
+    }
+    val isOwner = remember(uiState.currentUserMember) {
+        uiState.currentUserMember?.role == com.example.travelmate.domain.model.TripMember.ROLE_OWNER
+    }
     
+    // Check if trip was deleted or user was removed
+    LaunchedEffect(uiState.error) {
+        if (uiState.error?.contains("không thuộc nhóm", ignoreCase = true) == true || 
+            uiState.error?.contains("Không tìm thấy", ignoreCase = true) == true) {
+            onBackClick()
+        }
+    }
+
     LaunchedEffect(tripId) {
         viewModel.getTrip(tripId)
     }
@@ -97,6 +118,7 @@ fun TripDetailScreen(
             dayInfo = trip?.itinerary?.getOrNull(selectedDayIndexForActivity)?.let { "Day ${it.dayNumber}" } ?: "",
             activity = editingActivity,
             existingActivities = currentDayActivities,
+            canEdit = canEdit,
             onDismiss = { 
                 showActivityDialog = false
                 editingActivity = null
@@ -135,14 +157,32 @@ fun TripDetailScreen(
                     IconButton(onClick = onBackClick, modifier = Modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.2f))) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = Color.White)
                     }
+                    
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         val context = LocalContext.current
+                        val coverPicker = rememberLauncherForActivityResult(
+                            contract = ActivityResultContracts.PickVisualMedia(),
+                            onResult = { uri ->
+                                uri?.let {
+                                    context.contentResolver.openInputStream(it)?.use { stream ->
+                                        viewModel.updateTripCover(stream.readBytes())
+                                    }
+                                }
+                            }
+                        )
+
+                        if (canEdit) {
+                            HeaderIcon(icon = Icons.Default.AddPhotoAlternate, onClick = {
+                                coverPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                            })
+                        }
+
+                        HeaderIcon(icon = Icons.Default.History, onClick = onHistoryClick)
                         HeaderIcon(icon = Icons.Default.Share, onClick = {
-                            val shareText = "Hãy xem kế hoạch chuyến đi của tôi: ${trip?.name}\n\n" +
-                                    "Điểm đến: ${trip?.destination}\n" +
-                                    "Thời gian: ${formatDateRange(trip?.startDate ?: 0, trip?.endDate ?: 0)}\n" +
-                                    "Ngân sách: ${String.format(Locale.US, "%,.0f %s", trip?.budgetAmount ?: 0.0, trip?.currency ?: "VND")}\n\n" +
-                                    "Chia sẻ từ ứng dụng TravelMate"
+                            val shareText = "Hãy tham gia cùng tôi trong chuyến đi: ${trip?.name}\n" +
+                                    "Mã mời: ${trip?.inviteCode}\n" +
+                                    "Hoặc dùng link: travelmate://join?token=${trip?.shareToken}\n\n" +
+                                    "Chia sẻ từ TravelMate"
                             
                             val sendIntent: Intent = Intent().apply {
                                 action = Intent.ACTION_SEND
@@ -152,18 +192,44 @@ fun TripDetailScreen(
                             val shareIntent = Intent.createChooser(sendIntent, null)
                             context.startActivity(shareIntent)
                         })
-                        HeaderIcon(icon = Icons.Default.Edit, onClick = onEditClick)
-                        HeaderIcon(icon = Icons.Default.Delete, onClick = { 
-                            showDeleteDialog = true
-                        })
+                        HeaderIcon(icon = Icons.Default.Group, onClick = onManageMembersClick)
+                        if (canEdit) {
+                            HeaderIcon(icon = Icons.Default.Edit, onClick = onEditClick)
+                        }
+                        if (isOwner) {
+                            HeaderIcon(icon = Icons.Default.Delete, onClick = { 
+                                showDeleteDialog = true
+                            })
+                        }
                     }
                 }
 
                 Column(
                     modifier = Modifier.align(Alignment.BottomStart).padding(20.dp)
                 ) {
-                    Surface(color = GreenPrimary, shape = RoundedCornerShape(8.dp)) {
-                        Text(text = trip?.status?.uppercase() ?: "UPCOMING", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(color = GreenPrimary, shape = RoundedCornerShape(8.dp)) {
+                            Text(text = trip?.status?.uppercase() ?: "UPCOMING", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
+                        }
+                        uiState.currentUserMember?.let { member ->
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Surface(
+                                color = when(member.role) {
+                                    com.example.travelmate.domain.model.TripMember.ROLE_OWNER -> Color(0xFFFFD700) // Gold
+                                    com.example.travelmate.domain.model.TripMember.ROLE_EDITOR -> BluePrimary
+                                    else -> GrayText
+                                },
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    text = member.role,
+                                    color = Color.White,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
                     }
                     Text(text = trip?.name ?: "Loading...", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -205,6 +271,9 @@ fun TripDetailScreen(
                             trip = trip,
                             totalSpent = uiState.totalSpent,
                             expenses = uiState.expenses,
+                            members = uiState.members,
+                            currentUserMember = uiState.currentUserMember,
+                            canEdit = canEdit,
                             onAddExpense = { selectedTab = 2 },
                             onAddActivity = { 
                                 selectedDayIndexForActivity = 0
@@ -214,6 +283,7 @@ fun TripDetailScreen(
                         1 -> {
                             ItineraryTab(
                                 itinerary = trip?.itinerary ?: emptyList(),
+                                canEdit = canEdit,
                                 onAddActivityClick = { dayIndex ->
                                     selectedDayIndexForActivity = dayIndex
                                     editingActivity = null
@@ -232,11 +302,13 @@ fun TripDetailScreen(
                             trip = trip,
                             totalSpent = uiState.totalSpent,
                             expenses = uiState.expenses,
+                            canEdit = canEdit,
                             onAddClick = { onAddExpenseClick() },
                             onDeleteExpense = { id -> viewModel.deleteExpense(id) }
                         )
                         3 -> PhotosTab(
                             urls = trip?.galleryUrls ?: emptyList(),
+                            canEdit = canEdit,
                             onAddPhotos = { uriStrings ->
                                 val byteArrayList = mutableListOf<ByteArray>()
                                 uriStrings.forEach { uriString ->
@@ -263,7 +335,7 @@ fun TripDetailScreen(
 }
 
 @Composable
-fun OverviewTab(trip: com.example.travelmate.domain.model.Trip?, totalSpent: Double, expenses: List<Expense>, onAddExpense: () -> Unit, onAddActivity: () -> Unit) {
+fun OverviewTab(trip: com.example.travelmate.domain.model.Trip?, totalSpent: Double, expenses: List<Expense>, members: List<com.example.travelmate.domain.model.TripMember>, currentUserMember: com.example.travelmate.domain.model.TripMember?, canEdit: Boolean, onAddExpense: () -> Unit, onAddActivity: () -> Unit) {
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
         // Budget Overview Card
         DetailCard {
@@ -349,14 +421,38 @@ fun OverviewTab(trip: com.example.travelmate.domain.model.Trip?, totalSpent: Dou
         Spacer(modifier = Modifier.height(20.dp))
 
         // Quick Actions
-        Text(text = "Quick Actions", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
-        Spacer(modifier = Modifier.height(12.dp))
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            ActionBtn(modifier = Modifier.weight(1f), icon = Icons.Default.Paid, label = "Add Expense", color = OrangeLight, tint = OrangePrimary, onClick = onAddExpense)
-            ActionBtn(modifier = Modifier.weight(1f), icon = Icons.Default.AddLocationAlt, label = "Add Activity", color = GreenLight, tint = GreenPrimary, onClick = onAddActivity)
+        if (canEdit) {
+            Text(text = "Quick Actions", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                ActionBtn(modifier = Modifier.weight(1f), icon = Icons.Default.Paid, label = "Add Expense", color = OrangeLight, tint = OrangePrimary, onClick = onAddExpense)
+                ActionBtn(modifier = Modifier.weight(1f), icon = Icons.Default.AddLocationAlt, label = "Add Activity", color = GreenLight, tint = GreenPrimary, onClick = onAddActivity)
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        // Permission Info Hint
+        currentUserMember?.let { member ->
+            val permissionText = when(member.role) {
+                com.example.travelmate.domain.model.TripMember.ROLE_OWNER -> "Bạn là trưởng nhóm. Bạn có toàn quyền quản lý thành viên và chuyến đi."
+                com.example.travelmate.domain.model.TripMember.ROLE_EDITOR -> "Bạn là biên tập viên. Bạn có thể chỉnh sửa lịch trình và chi tiêu."
+                else -> "Bạn là người xem. Bạn chỉ có thể xem thông tin chuyến đi."
+            }
+            Card(
+                colors = CardDefaults.cardColors(containerColor = BluePrimary.copy(alpha = 0.05f)),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Info, contentDescription = null, tint = BluePrimary, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(text = permissionText, fontSize = 12.sp, color = BluePrimary)
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+
         Text(text = "About This Trip", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
         Text(text = trip?.description ?: "No description provided.", fontSize = 14.sp, color = GrayText, modifier = Modifier.padding(top = 8.dp))
     }
@@ -365,6 +461,7 @@ fun OverviewTab(trip: com.example.travelmate.domain.model.Trip?, totalSpent: Dou
 @Composable
 fun ItineraryTab(
     itinerary: List<ItineraryDay>, 
+    canEdit: Boolean,
     onAddActivityClick: (Int) -> Unit,
     onEditActivityClick: (Int, TripActivity) -> Unit,
     onToggleDone: (Int, String) -> Unit,
@@ -411,9 +508,11 @@ fun ItineraryTab(
                         Text(text = dateStr, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurface)
                         Text(text = "Day ${currentDay.dayNumber} • ${currentDay.activities.size} activities", fontSize = 12.sp, color = GrayText)
                     }
-                    Button(onClick = { onAddActivityClick(selectedDayIndex) }, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = BluePrimary)) {
-                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
-                        Text(" Add", color = Color.White)
+                    if (canEdit) {
+                        Button(onClick = { onAddActivityClick(selectedDayIndex) }, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = BluePrimary)) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
+                            Text(" Add", color = Color.White)
+                        }
                     }
                 }
 
@@ -426,6 +525,7 @@ fun ItineraryTab(
                         items(currentDay.activities) { activity ->
                             TimelineActivityItem(
                                 activity = activity,
+                                canEdit = canEdit,
                                 onToggleDone = { onToggleDone(selectedDayIndex, activity.id) },
                                 onDelete = { onDeleteActivity(selectedDayIndex, activity.id) },
                                 onEdit = { onEditActivityClick(selectedDayIndex, activity) }
@@ -439,12 +539,16 @@ fun ItineraryTab(
 }
 
 @Composable
-fun TimelineActivityItem(activity: TripActivity, onToggleDone: () -> Unit, onDelete: () -> Unit, onEdit: () -> Unit) {
+fun TimelineActivityItem(activity: TripActivity, canEdit: Boolean, onToggleDone: () -> Unit, onDelete: () -> Unit, onEdit: () -> Unit) {
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(text = activity.time, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = GrayText)
             Spacer(modifier = Modifier.height(4.dp))
-            IconButton(onClick = onToggleDone, modifier = Modifier.size(24.dp)) {
+            IconButton(
+                onClick = { if (canEdit) onToggleDone() }, 
+                modifier = Modifier.size(24.dp),
+                enabled = canEdit
+            ) {
                 Icon(
                     imageVector = if (activity.isDone) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked, 
                     contentDescription = null, 
@@ -489,8 +593,10 @@ fun TimelineActivityItem(activity: TripActivity, onToggleDone: () -> Unit, onDel
                     Text(text = activity.title, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface)
                     Text(text = activity.location, fontSize = 12.sp, color = GrayText)
                 }
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.Default.DeleteOutline, contentDescription = null, tint = Color.Red.copy(alpha = 0.4f), modifier = Modifier.size(18.dp))
+                if (canEdit) {
+                    IconButton(onClick = onDelete) {
+                        Icon(Icons.Default.DeleteOutline, contentDescription = null, tint = Color.Red.copy(alpha = 0.4f), modifier = Modifier.size(18.dp))
+                    }
                 }
             }
         }
@@ -502,6 +608,7 @@ fun ExpensesTabContentHighFidelity(
     trip: com.example.travelmate.domain.model.Trip?, 
     totalSpent: Double, 
     expenses: List<Expense>, 
+    canEdit: Boolean,
     onAddClick: () -> Unit,
     onDeleteExpense: (String) -> Unit
 ) {
@@ -527,9 +634,11 @@ fun ExpensesTabContentHighFidelity(
         Spacer(modifier = Modifier.height(24.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text(text = "By Category", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
-            Button(onClick = onAddClick, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary)) {
-                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
-                Text(" Thêm", color = Color.White)
+            if (canEdit) {
+                Button(onClick = onAddClick, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary)) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
+                    Text(" Thêm", color = Color.White)
+                }
             }
         }
         
@@ -569,6 +678,7 @@ fun ExpensesTabContentHighFidelity(
                     title = expense.description, 
                     amount = String.format(Locale.US, "%,.0f %s", expense.amount, expense.currency), 
                     icon = Icons.Default.Payments,
+                    canEdit = canEdit,
                     onDelete = { onDeleteExpense(expense.id) }
                 )
                 Spacer(modifier = Modifier.height(12.dp))
@@ -578,7 +688,7 @@ fun ExpensesTabContentHighFidelity(
 }
 
 @Composable
-fun PhotosTab(urls: List<String>, onAddPhotos: (List<String>) -> Unit, onDeletePhoto: (String) -> Unit) {
+fun PhotosTab(urls: List<String>, canEdit: Boolean, onAddPhotos: (List<String>) -> Unit, onDeletePhoto: (String) -> Unit) {
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickMultipleVisualMedia(),
         onResult = { uris ->
@@ -591,17 +701,19 @@ fun PhotosTab(urls: List<String>, onAddPhotos: (List<String>) -> Unit, onDeleteP
     Column(modifier = Modifier.fillMaxSize().padding(20.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text(text = "Gallery", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-            Button(
-                onClick = { 
-                    photoPickerLauncher.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                    )
-                }, 
-                shape = RoundedCornerShape(12.dp), 
-                colors = ButtonDefaults.buttonColors(containerColor = BluePrimary)
-            ) {
-                Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(16.dp))
-                Text(" Upload")
+            if (canEdit) {
+                Button(
+                    onClick = { 
+                        photoPickerLauncher.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    }, 
+                    shape = RoundedCornerShape(12.dp), 
+                    colors = ButtonDefaults.buttonColors(containerColor = BluePrimary)
+                ) {
+                    Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Text(" Upload")
+                }
             }
         }
         Spacer(modifier = Modifier.height(16.dp))
@@ -613,11 +725,13 @@ fun PhotosTab(urls: List<String>, onAddPhotos: (List<String>) -> Unit, onDeleteP
                 items(urls) { url ->
                     Box(modifier = Modifier.aspectRatio(1f)) {
                         AsyncImage(model = url, contentDescription = null, modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)).background(GrayBackground), contentScale = ContentScale.Crop)
-                        IconButton(
-                            onClick = { onDeletePhoto(url) },
-                            modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(24.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.5f))
-                        ) {
-                            Icon(Icons.Default.Close, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                        if (canEdit) {
+                            IconButton(
+                                onClick = { onDeletePhoto(url) },
+                                modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(24.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.5f))
+                            ) {
+                                Icon(Icons.Default.Close, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                            }
                         }
                     }
                 }
@@ -725,19 +839,7 @@ fun WeatherDayItem(day: String, temp: String, icon: ImageVector, tint: Color) {
 }
 
 @Composable
-fun DetailCard(content: @Composable ColumnScope.() -> Unit) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, GrayBorder.copy(alpha = 0.5f)),
-        color = MaterialTheme.colorScheme.surface
-    ) {
-        Column(modifier = Modifier.padding(20.dp), content = content)
-    }
-}
-
-@Composable
-fun ExpenseListItem(category: String, title: String, amount: String, icon: ImageVector, onDelete: (() -> Unit)? = null) {
+fun ExpenseListItem(category: String, title: String, amount: String, icon: ImageVector, canEdit: Boolean, onDelete: (() -> Unit)? = null) {
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Surface(color = MaterialTheme.colorScheme.surface, border = androidx.compose.foundation.BorderStroke(1.dp, GrayBorder.copy(alpha = 0.5f)), shape = CircleShape, modifier = Modifier.size(44.dp)) {
             Box(contentAlignment = Alignment.Center) {
@@ -751,7 +853,7 @@ fun ExpenseListItem(category: String, title: String, amount: String, icon: Image
         }
         Column(horizontalAlignment = Alignment.End) {
             Text(text = amount, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
-            if (onDelete != null) {
+            if (onDelete != null && canEdit) {
                 IconButton(onClick = onDelete, modifier = Modifier.size(20.dp)) {
                     Icon(Icons.Default.DeleteOutline, contentDescription = null, tint = Color.Red.copy(alpha = 0.4f), modifier = Modifier.size(16.dp))
                 }
@@ -766,6 +868,7 @@ fun ActivityDialog(
     dayInfo: String,
     activity: TripActivity? = null,
     existingActivities: List<TripActivity> = emptyList(),
+    canEdit: Boolean = true,
     onDismiss: () -> Unit, 
     onConfirm: (TripActivity, ByteArray?) -> Unit
 ) {
@@ -820,9 +923,9 @@ fun ActivityDialog(
                         .height(150.dp)
                         .clip(RoundedCornerShape(16.dp))
                         .background(GrayBackground)
-                        .clickable { 
+                        .then(if (canEdit) Modifier.clickable { 
                             photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                        },
+                        } else Modifier),
                     contentAlignment = Alignment.Center
                 ) {
                     if (selectedImageUri != null) {
@@ -851,7 +954,7 @@ fun ActivityDialog(
                         val icon = pair.second
                         val isSel = selectedType == type
                         Surface(
-                            onClick = { selectedType = type },
+                            onClick = { if (canEdit) selectedType = type },
                             shape = RoundedCornerShape(20.dp),
                             border = androidx.compose.foundation.BorderStroke(1.dp, if (isSel) BluePrimary else GrayBorder.copy(alpha = 0.5f)),
                             color = if (isSel) BluePrimary.copy(alpha = 0.05f) else MaterialTheme.colorScheme.surface
@@ -866,58 +969,63 @@ fun ActivityDialog(
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
-                DialogTextField(label = "TIME (HH:mm SA/CH)", value = time, onValueChange = { time = it; errorMessage = null }, icon = Icons.Default.AccessTime)
-                DialogTextField(label = "ACTIVITY NAME *", value = title, onValueChange = { title = it }, placeholder = "e.g. Visit Ha Long Cave")
-                DialogTextField(label = "LOCATION", value = location, onValueChange = { location = it }, placeholder = "e.g. Ha Long Bay")
-                DialogTextField(label = "NOTES", value = note, onValueChange = { note = it }, placeholder = "Optional notes...")
+                DialogTextField(label = "TIME (HH:mm SA/CH)", value = time, onValueChange = { if (canEdit) { time = it; errorMessage = null } }, icon = Icons.Default.AccessTime)
+                DialogTextField(label = "ACTIVITY NAME *", value = title, onValueChange = { if (canEdit) title = it }, placeholder = "e.g. Visit Ha Long Cave")
+                DialogTextField(label = "LOCATION", value = location, onValueChange = { if (canEdit) location = it }, placeholder = "e.g. Ha Long Bay")
+                DialogTextField(label = "NOTES", value = note, onValueChange = { if (canEdit) note = it }, placeholder = "Optional notes...")
 
                 if (errorMessage != null) {
                     Text(text = errorMessage!!, color = MaterialTheme.colorScheme.error, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
                 }
 
                 Spacer(modifier = Modifier.height(32.dp))
-                Button(
-                    onClick = { 
-                        if (title.isEmpty()) {
-                            errorMessage = "Vui lòng nhập tên hoạt động"
-                            return@Button
-                        }
+                
+                if (canEdit) {
+                    Button(
+                        onClick = { 
+                            if (title.isEmpty()) {
+                                errorMessage = "Vui lòng nhập tên hoạt động"
+                                return@Button
+                            }
 
-                        val newTimeMinutes = parseTime(time)
-                        if (newTimeMinutes == -1) {
-                            errorMessage = "Định dạng giờ không hợp lệ (vd: 09:00 SA)"
-                            return@Button
-                        }
+                            val newTimeMinutes = parseTime(time)
+                            if (newTimeMinutes == -1) {
+                                errorMessage = "Định dạng giờ không hợp lệ (vd: 09:00 SA)"
+                                return@Button
+                            }
 
-                        val conflict = existingActivities.any { 
-                            it.id != activity?.id && parseTime(it.time) >= newTimeMinutes 
-                        }
+                            val conflict = existingActivities.any { 
+                                it.id != activity?.id && parseTime(it.time) >= newTimeMinutes 
+                            }
 
-                        if (conflict) {
-                            errorMessage = "Thời gian hoạt động không được sớm hơn hoặc trùng với các hoạt động đã có"
-                            return@Button
-                        }
+                            if (conflict) {
+                                errorMessage = "Thời gian hoạt động không được sớm hơn hoặc trùng với các hoạt động đã có"
+                                return@Button
+                            }
 
-                        val imageBytes = selectedImageUri?.let { uri ->
-                            context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                        }
-                        val newActivity = (activity ?: TripActivity()).copy(
-                            title = title,
-                            time = time,
-                            location = location,
-                            type = selectedType,
-                            note = note,
-                            imageUrl = currentImageUrl
-                        )
-                        onConfirm(newActivity, imageBytes)
-                    },
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF388E3C)),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Icon(if (activity == null) Icons.Default.Add else Icons.Default.Save, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(if (activity == null) "Add Activity" else "Save Changes", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            val imageBytes = selectedImageUri?.let { uri ->
+                                context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                            }
+                            val newActivity = (activity ?: TripActivity()).copy(
+                                title = title,
+                                time = time,
+                                location = location,
+                                type = selectedType,
+                                note = note,
+                                imageUrl = currentImageUrl
+                            )
+                            onConfirm(newActivity, imageBytes)
+                        },
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF388E3C)),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Icon(if (activity == null) Icons.Default.Add else Icons.Default.Save, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(if (activity == null) "Add Activity" else "Save Changes", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
+                } else {
+                    Text(text = "Chế độ xem chi tiết", color = GrayText, fontSize = 12.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
                 }
             }
         }
