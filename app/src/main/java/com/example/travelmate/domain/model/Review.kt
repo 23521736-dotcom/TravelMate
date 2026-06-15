@@ -13,5 +13,7 @@ data class Review(
     @get:PropertyName("rating") @set:PropertyName("rating") var rating: Float = 0f,
     @get:PropertyName("comment") @set:PropertyName("comment") var comment: String = "",
     @get:PropertyName("imageUrls") @set:PropertyName("imageUrls") var imageUrls: List<String> = emptyList(),
+    @get:PropertyName("destinationName") @set:PropertyName("destinationName") var destinationName: String = "",
+    @get:PropertyName("destinationImage") @set:PropertyName("destinationImage") var destinationImage: String = "",
     @get:PropertyName("createdAt") @set:PropertyName("createdAt") var createdAt: Long = System.currentTimeMillis()
 )

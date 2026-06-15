@@ -122,51 +122,65 @@ class AuthRepositoryImpl @Inject constructor(
     }
 
     private fun mapSnapshotToUser(snapshot: DataSnapshot, uid: String): User {
-        if (!snapshot.exists()) {
-            return User(uid = uid, email = firebaseAuth.currentUser?.email ?: "", fullName = "Thành viên mới")
-        }
-
-        val interestsList = mutableListOf<Category>()
-        snapshot.child("interests").children.forEach { child ->
-            child.getValue(String::class.java)?.let { categoryName ->
-                try {
-                    interestsList.add(Category.valueOf(categoryName))
-                } catch (e: Exception) {}
+        try {
+            if (!snapshot.exists()) {
+                return User(uid = uid, email = firebaseAuth.currentUser?.email ?: "", fullName = "Thành viên mới")
             }
-        }
-
-        // Helper functions for safe type conversion
-        fun safeInt(snap: DataSnapshot): Int {
-            return when (val v = snap.value) {
-                is Number -> v.toInt()
-                is String -> v.toIntOrNull() ?: 0
-                else -> 0
+            
+            val interestsList = mutableListOf<Category>()
+            try {
+                snapshot.child("interests").children.forEach { child ->
+                    child.getValue(String::class.java)?.let { categoryName ->
+                        try {
+                            interestsList.add(Category.valueOf(categoryName))
+                        } catch (e: Exception) {}
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("AuthRepository", "Error mapping interests", e)
             }
-        }
 
-        fun safeDouble(snap: DataSnapshot): Double {
-            return when (val v = snap.value) {
-                is Number -> v.toDouble()
-                is String -> v.toDoubleOrNull() ?: 0.0
-                else -> 0.0
+            // Helper functions for safe type conversion
+            fun safeInt(snap: DataSnapshot): Int {
+                return try {
+                    when (val v = snap.value) {
+                        is Number -> v.toInt()
+                        is String -> v.toIntOrNull() ?: 0
+                        else -> 0
+                    }
+                } catch (e: Exception) { 0 }
             }
-        }
 
-        return User(
-            uid = uid,
-            email = snapshot.child("email").getValue(String::class.java) ?: "",
-            fullName = snapshot.child("fullName").getValue(String::class.java),
-            photoUrl = snapshot.child("photoUrl").getValue(String::class.java) ?: snapshot.child("photoURL").getValue(String::class.java),
-            bio = snapshot.child("bio").getValue(String::class.java),
-            location = snapshot.child("location").getValue(String::class.java),
-            displayName = snapshot.child("displayName").getValue(String::class.java) ?: snapshot.child("handle").getValue(String::class.java),
-            isBlocked = snapshot.child("isBlocked").getValue(Boolean::class.java) ?: false,
-            totalTrips = safeInt(snapshot.child("totalTrips")),
-            totalSpent = safeDouble(snapshot.child("totalSpent")),
-            upcomingTrips = safeInt(snapshot.child("upcomingTrips")),
-            interests = interestsList,
-            wishlistIds = snapshot.child("wishlistIds").children.mapNotNull { it.getValue(String::class.java) }
-        )
+            fun safeDouble(snap: DataSnapshot): Double {
+                return try {
+                    when (val v = snap.value) {
+                        is Number -> v.toDouble()
+                        is String -> v.toDoubleOrNull() ?: 0.0
+                        else -> 0.0
+                    }
+                } catch (e: Exception) { 0.0 }
+            }
+
+            return User(
+                uid = uid,
+                email = snapshot.child("email").getValue(String::class.java) ?: "",
+                fullName = snapshot.child("fullName").getValue(String::class.java) ?: "Traveler",
+                photoUrl = snapshot.child("photoUrl").getValue(String::class.java) ?: snapshot.child("photoURL").getValue(String::class.java),
+                bio = snapshot.child("bio").getValue(String::class.java),
+                location = snapshot.child("location").getValue(String::class.java),
+                displayName = snapshot.child("displayName").getValue(String::class.java) ?: snapshot.child("handle").getValue(String::class.java),
+                isBlocked = snapshot.child("isBlocked").getValue(Boolean::class.java) ?: false,
+                totalTrips = safeInt(snapshot.child("totalTrips")),
+                totalSpent = safeDouble(snapshot.child("totalSpent")),
+                upcomingTrips = safeInt(snapshot.child("upcomingTrips")),
+                interests = interestsList,
+                wishlistIds = try { snapshot.child("wishlistIds").children.mapNotNull { it.getValue(String::class.java) } } catch (e: Exception) { emptyList() }
+            )
+        } catch (e: Exception) {
+            android.util.Log.e("AuthRepository", "CRITICAL ERROR mapping user profile for $uid: ${e.message}", e)
+            // Return a safe fallback user to prevent startup crash
+            return User(uid = uid, email = "", fullName = "User")
+        }
     }
 
     override suspend fun signUp(email: String, password: String, name: String): NetworkResult<User> = withContext(Dispatchers.IO) {

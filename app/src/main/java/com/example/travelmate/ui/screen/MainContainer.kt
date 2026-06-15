@@ -41,6 +41,7 @@ fun MainContainer(
     onTripClick: (String) -> Unit,
     onEditProfileClick: () -> Unit,
     onWishlistClick: () -> Unit,
+    onMyReviewsClick: () -> Unit,
     onAddExpenseClick: () -> Unit,
     onDestinationClick: (String) -> Unit,
     onNotificationsClick: () -> Unit,
@@ -132,6 +133,7 @@ fun MainContainer(
                 NavItem.Profile.route -> ProfileScreen(
                     onEditProfileClick = onEditProfileClick,
                     onWishlistClick = onWishlistClick,
+                    onMyReviewsClick = onMyReviewsClick,
                     onSettingsClick = onSettingsClick,
                     onLogoutClick = onLogoutClick,
                     viewModel = authViewModel

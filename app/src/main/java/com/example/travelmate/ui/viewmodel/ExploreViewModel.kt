@@ -6,6 +6,7 @@ import com.example.travelmate.domain.model.Category
 import com.example.travelmate.domain.model.Destination
 import com.example.travelmate.domain.repository.DestinationRepository
 import com.example.travelmate.util.NetworkResult
+import com.example.travelmate.util.normalizeVietnamese
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -69,12 +70,12 @@ class ExploreViewModel @Inject constructor(
     }
 
     private fun applyFilters() {
-        val query = _uiState.value.searchQuery.lowercase()
+        val query = _uiState.value.searchQuery.normalizeVietnamese()
         val category = _uiState.value.selectedCategory
         
         val filtered = _uiState.value.destinations.filter { dest ->
-            val matchesQuery = dest.name.lowercase().contains(query) || 
-                               dest.location.lowercase().contains(query)
+            val matchesQuery = dest.name.normalizeVietnamese().contains(query) || 
+                               dest.location.normalizeVietnamese().contains(query)
             val matchesCategory = category == "All" || 
                                   dest.categories.any { it.displayName == category }
             matchesQuery && matchesCategory

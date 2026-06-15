@@ -35,6 +35,7 @@ import com.example.travelmate.ui.viewmodel.HomeViewModel
 fun ProfileScreen(
     onEditProfileClick: () -> Unit,
     onWishlistClick: () -> Unit,
+    onMyReviewsClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onLogoutClick: () -> Unit,
     viewModel: AuthViewModel = hiltViewModel(),
@@ -185,7 +186,11 @@ fun ProfileScreen(
                     StatItem(number = homeUiState.totalTrips.toString(), label = "Trips")
                     StatItem(number = homeUiState.upcomingTrips.toString(), label = "Upcoming")
                     StatItem(number = String.format(java.util.Locale.US, "%.1fM", homeUiState.totalSpent / 1000000), label = "Spent")
-                    StatItem(number = "0", label = "Reviews")
+                    StatItem(
+                        number = homeUiState.totalReviews.toString(), 
+                        label = "Reviews",
+                        modifier = Modifier.clickable { onMyReviewsClick() }
+                    )
                 }
             }
         }
@@ -236,6 +241,7 @@ fun ProfileScreen(
                 showChangePasswordDialog = true
             })
             MenuItem(icon = Icons.Default.Favorite, title = "Danh sách yêu thích", onClick = onWishlistClick)
+            MenuItem(icon = Icons.Default.RateReview, title = "Đánh giá của tôi", onClick = onMyReviewsClick)
             MenuItem(icon = Icons.Default.CloudDownload, title = "Nạp dữ liệu địa danh (Seed)", onClick = {
                 viewModel.seedDatabase(onSuccess = {
                     homeViewModel.refreshData()
@@ -321,8 +327,8 @@ fun ChangePasswordDialog(
 }
 
 @Composable
-fun StatItem(number: String, label: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+fun StatItem(number: String, label: String, modifier: Modifier = Modifier) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
         Text(text = number, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
         Text(text = label, fontSize = 12.sp, color = Color.White.copy(alpha = 0.7f))
     }

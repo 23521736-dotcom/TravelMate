@@ -9,6 +9,7 @@ import com.example.travelmate.domain.repository.AuthRepository
 import com.example.travelmate.domain.repository.DestinationRepository
 import com.example.travelmate.domain.repository.TripRepository
 import com.example.travelmate.util.NetworkResult
+import com.example.travelmate.util.normalizeVietnamese
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -66,9 +67,13 @@ class PlanTripViewModel @Inject constructor(
     fun onTripNameChange(name: String) = _uiState.update { it.copy(tripName = name) }
     
     fun onDestinationQueryChange(query: String) {
+        val normalizedQuery = query.normalizeVietnamese()
         _uiState.update { state ->
             val filtered = if (query.isEmpty()) emptyList() 
-            else state.destinations.filter { it.name.lowercase().contains(query.lowercase()) || it.location.lowercase().contains(query.lowercase()) }
+            else state.destinations.filter { 
+                it.name.normalizeVietnamese().contains(normalizedQuery) || 
+                it.location.normalizeVietnamese().contains(normalizedQuery) 
+            }
             state.copy(destination = query, filteredDestinations = filtered)
         }
     }

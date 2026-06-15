@@ -6,6 +6,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -29,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import com.example.travelmate.ui.screen.components.ImageViewerDialog
 import com.example.travelmate.ui.theme.*
 import com.example.travelmate.ui.viewmodel.DestinationDetailViewModel
 import com.example.travelmate.domain.model.Review
@@ -48,6 +50,8 @@ fun DestinationDetailScreen(
     val uiState by viewModel.uiState.collectAsState()
     val destination = uiState.destination
     val context = LocalContext.current
+    
+    var selectedImageUrl by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(destinationId) {
         viewModel.getDestination(destinationId)
@@ -176,7 +180,12 @@ fun DestinationDetailScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFFBC02D), modifier = Modifier.size(16.dp))
-                                    Text(text = " ${destination.rating}", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = BluePrimary)
+                                    Text(
+                                        text = " ${String.format(Locale.US, "%.1f", destination.rating)}", 
+                                        fontWeight = FontWeight.Bold, 
+                                        fontSize = 14.sp, 
+                                        color = BluePrimary
+                                    )
                                 }
                             }
                         }
@@ -222,7 +231,12 @@ fun DestinationDetailScreen(
                         // Quick Info Cards
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                             InfoBox(modifier = Modifier.weight(1f), icon = Icons.Default.Groups, title = "Lượt đánh giá", value = "${destination.reviewCount}")
-                            InfoBox(modifier = Modifier.weight(1f), icon = Icons.Default.Star, title = "Điểm đánh giá", value = "${destination.rating}/5.0")
+                            InfoBox(
+                                modifier = Modifier.weight(1f), 
+                                icon = Icons.Default.Star, 
+                                title = "Điểm đánh giá", 
+                                value = "${String.format(Locale.US, "%.1f", destination.rating)}/5.0"
+                            )
                         }
 
                         Spacer(modifier = Modifier.height(24.dp))
@@ -291,7 +305,7 @@ fun DestinationDetailScreen(
                         } else {
                             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                                 uiState.reviews.forEach { review ->
-                                    ReviewItem(review = review)
+                                    ReviewItem(review = review, onImageClick = { selectedImageUrl = it })
                                 }
                             }
                         }
@@ -301,6 +315,10 @@ fun DestinationDetailScreen(
                 }
             }
         }
+    }
+
+    selectedImageUrl?.let { url ->
+        ImageViewerDialog(imageUrl = url, onDismiss = { selectedImageUrl = null })
     }
 }
 
@@ -365,7 +383,7 @@ fun ReviewSummary(reviews: List<Review>) {
 }
 
 @Composable
-fun ReviewItem(review: Review) {
+fun ReviewItem(review: Review, onImageClick: (String) -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
@@ -415,7 +433,10 @@ fun ReviewItem(review: Review) {
                         AsyncImage(
                             model = url,
                             contentDescription = null,
-                            modifier = Modifier.size(80.dp).clip(RoundedCornerShape(8.dp)),
+                            modifier = Modifier
+                                .size(80.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { onImageClick(url) },
                             contentScale = ContentScale.Crop
                         )
                     }

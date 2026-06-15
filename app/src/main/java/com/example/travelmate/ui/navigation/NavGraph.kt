@@ -25,8 +25,12 @@ fun NavGraph(
 
     // Determine initial route once to avoid NavHost recreation
     val startRoute = remember(authUiState.isCheckingSession, authUiState.user, authUiState.isAwaitingEmailVerification) {
+        val user = authUiState.user
         if (authUiState.isCheckingSession) null
-        else if (authUiState.user != null && !authUiState.isAwaitingEmailVerification) Screen.Main.route
+        else if (user != null && !authUiState.isAwaitingEmailVerification) {
+            if (user.displayName.isNullOrEmpty() || user.interests.isEmpty()) Screen.CompleteProfile.route
+            else Screen.Main.route
+        }
         else Screen.Login.route
     }
 
@@ -52,8 +56,8 @@ fun NavGraph(
                             authUiState.isFirstTime -> {
                                 navController.navigate(Screen.Onboarding.route)
                             }
-                            user != null && user.interests.isEmpty() -> {
-                                navController.navigate(Screen.InterestSelection.route)
+                            user != null && (user.displayName.isNullOrEmpty() || user.interests.isEmpty()) -> {
+                                navController.navigate(Screen.CompleteProfile.route)
                             }
                             else -> {
                                 navController.navigate(Screen.Main.route)
@@ -68,23 +72,18 @@ fun NavGraph(
                 OnboardingScreen(
                     onNext = { 
                         authViewModel.completeOnboarding()
-                        val user = authViewModel.uiState.value.user
-                        if (user != null && user.interests.isEmpty()) {
-                            navController.navigate(Screen.InterestSelection.route)
-                        } else {
-                            navController.navigate(Screen.Main.route)
-                        }
+                        navController.navigate(Screen.CompleteProfile.route)
                     }
                 )
             }
-            composable(Screen.InterestSelection.route) {
-                InterestSelectionScreen(
-                    viewModel = authViewModel,
+            composable(Screen.CompleteProfile.route) {
+                CompleteProfileScreen(
                     onComplete = { 
                         navController.navigate(Screen.Main.route) {
-                            popUpTo(Screen.Onboarding.route) { inclusive = true }
+                            popUpTo(Screen.CompleteProfile.route) { inclusive = true }
                         }
-                    }
+                    },
+                    viewModel = authViewModel
                 )
             }
             composable(Screen.SignUp.route) {
@@ -131,6 +130,7 @@ fun NavGraph(
                     },
                     onEditProfileClick = { navController.navigate(Screen.EditProfile.route) },
                     onWishlistClick = { navController.navigate(Screen.Wishlist.route) },
+                    onMyReviewsClick = { navController.navigate(Screen.MyReviews.route) },
                     onAddExpenseClick = { navController.navigate(Screen.AddExpense.createRoute()) },
                     onDestinationClick = { id -> 
                         navController.navigate(Screen.DestinationDetail.createRoute(id))
@@ -173,6 +173,14 @@ fun NavGraph(
             }
             composable(Screen.Policy.route) {
                 PolicyScreen(onBackClick = { navController.popBackStack() })
+            }
+            composable(Screen.MyReviews.route) {
+                MyReviewsScreen(
+                    onBackClick = { navController.popBackStack() },
+                    onDestinationClick = { id ->
+                        navController.navigate(Screen.DestinationDetail.createRoute(id))
+                    }
+                )
             }
             composable(Screen.EditProfile.route) {
                 EditProfileScreen(

@@ -8,6 +8,7 @@ import com.example.travelmate.domain.model.User
 import com.example.travelmate.domain.repository.AuthRepository
 import com.example.travelmate.domain.repository.DestinationRepository
 import com.example.travelmate.domain.repository.NotificationRepository
+import com.example.travelmate.domain.repository.ReviewRepository
 import com.example.travelmate.domain.repository.TripRepository
 import com.example.travelmate.util.NetworkResult
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -25,6 +26,7 @@ data class HomeUiState(
     val totalTrips: Int = 0,
     val totalSpent: Double = 0.0,
     val upcomingTrips: Int = 0,
+    val totalReviews: Int = 0,
     val recommendedDestinations: List<Destination> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null
@@ -35,7 +37,8 @@ class HomeViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val destinationRepository: DestinationRepository,
     private val tripRepository: TripRepository,
-    private val notificationRepository: NotificationRepository
+    private val notificationRepository: NotificationRepository,
+    private val reviewRepository: ReviewRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -45,6 +48,7 @@ class HomeViewModel @Inject constructor(
     private var tripsJob: Job? = null
     private var expensesJob: Job? = null
     private var notificationsJob: Job? = null
+    private var reviewsJob: Job? = null
 
     init {
         refreshData()
@@ -75,6 +79,9 @@ class HomeViewModel @Inject constructor(
                         if (tripsJob?.isActive != true) {
                             fetchUserTrips()
                         }
+                        if (reviewsJob?.isActive != true) {
+                            fetchUserReviews()
+                        }
                     }
                     is NetworkResult.Error -> {
                         _uiState.update { it.copy(isLoading = false, error = result.message) }
@@ -95,7 +102,7 @@ class HomeViewModel @Inject constructor(
                         ?: trips.filter { it.status == com.example.travelmate.domain.model.Trip.STATUS_UPCOMING }
                             .minByOrNull { it.startDate }
                     
-                    val upcomingCount = trips.count { it.status == com.example.travelmate.domain.model.Trip.STATUS_UPCOMING }
+                    val upcomingCount = trips.count { it.getCalculatedStatus() == com.example.travelmate.domain.model.Trip.STATUS_UPCOMING }
                     
                     _uiState.update { it.copy(
                         ongoingTrip = ongoing,
@@ -123,6 +130,17 @@ class HomeViewModel @Inject constructor(
                         exp.amount * rate
                     }
                     _uiState.update { it.copy(totalSpent = totalSpent) }
+                }
+            }
+        }
+    }
+
+    private fun fetchUserReviews() {
+        reviewsJob = viewModelScope.launch {
+            val user = authRepository.getCurrentUser() ?: return@launch
+            reviewRepository.getUserReviews(user.uid).collect { result ->
+                if (result is NetworkResult.Success) {
+                    _uiState.update { it.copy(totalReviews = result.data.size) }
                 }
             }
         }
@@ -177,5 +195,6 @@ class HomeViewModel @Inject constructor(
         tripsJob?.cancel()
         expensesJob?.cancel()
         notificationsJob?.cancel()
+        reviewsJob?.cancel()
     }
 }

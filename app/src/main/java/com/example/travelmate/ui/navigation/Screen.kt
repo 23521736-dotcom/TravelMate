@@ -10,6 +10,7 @@ sealed class Screen(val route: String) {
     object Wishlist : Screen("wishlist")
     object Main : Screen("main")
     object EditProfile : Screen("edit_profile")
+    object CompleteProfile : Screen("complete_profile")
     object PlanTrip : Screen("plan_trip")
     object TripDetail : Screen("trip_detail/{tripId}") {
         fun createRoute(tripId: String) = "trip_detail/$tripId"
@@ -36,6 +37,7 @@ sealed class Screen(val route: String) {
     }
     object Settings : Screen("settings")
     object Policy : Screen("policy")
+    object MyReviews : Screen("my_reviews")
     object WriteReview : Screen("write_review/{destinationId}") {
         fun createRoute(destinationId: String) = "write_review/$destinationId"
     }

@@ -12,6 +12,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.Json
@@ -126,7 +127,19 @@ class DestinationRepositoryImpl @Inject constructor(
                         trySend(NetworkResult.Success(mapSnapshotToDestination(snapshot)))
                     } else {
                         android.util.Log.w("DestRepository", "Destination with ID $id not found")
-                        trySend(NetworkResult.Error("Destination not found"))
+                        // If ID not found directly, try searching by child property "id"
+                        launch {
+                            try {
+                                val searchSnap = destinationsRef.orderByChild("id").equalTo(id).get().await()
+                                if (searchSnap.exists() && searchSnap.childrenCount > 0) {
+                                    trySend(NetworkResult.Success(mapSnapshotToDestination(searchSnap.children.first())))
+                                } else {
+                                    trySend(NetworkResult.Error("Destination not found"))
+                                }
+                            } catch (e: Exception) {
+                                trySend(NetworkResult.Error("Destination search failed"))
+                            }
+                        }
                     }
                 } catch (e: Exception) {
                     android.util.Log.e("DestRepository", "Error mapping destination $id", e)

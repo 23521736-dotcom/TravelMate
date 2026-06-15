@@ -356,6 +356,10 @@ class AuthViewModel @Inject constructor(
         _uiState.update { it.copy(isSuccess = false, isLoading = false, error = null) }
     }
 
+    fun setError(message: String) {
+        _uiState.update { it.copy(error = message) }
+    }
+
     fun seedDatabase(onSuccess: () -> Unit = {}) {
         viewModelScope.launch {
             destinationRepository.seedDatabase().collect { result ->

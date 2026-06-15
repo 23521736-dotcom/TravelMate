@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.travelmate.domain.model.Review
 import com.example.travelmate.domain.repository.AuthRepository
+import com.example.travelmate.domain.repository.DestinationRepository
 import com.example.travelmate.domain.repository.ReviewRepository
 import com.example.travelmate.domain.repository.TripRepository
 import com.example.travelmate.util.NetworkResult
@@ -27,7 +28,8 @@ data class ReviewUiState(
 class ReviewViewModel @Inject constructor(
     private val reviewRepository: ReviewRepository,
     private val authRepository: AuthRepository,
-    private val tripRepository: TripRepository
+    private val tripRepository: TripRepository,
+    private val destinationRepository: DestinationRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ReviewUiState())
@@ -50,29 +52,70 @@ class ReviewViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true) }
             val user = authRepository.getCurrentUser() ?: return@launch
             
-            val uploadedImageUrls = mutableListOf<String>()
+            var destinationName = ""
+            var destinationImage = ""
             
-            // Upload images first
-            images.forEach { bytes ->
-                val timestamp = System.currentTimeMillis()
-                val randomString = UUID.randomUUID().toString().take(6)
-                val fileName = "${timestamp}_$randomString.jpg"
-                val path = "reviews/$destinationId/$fileName"
-                tripRepository.uploadImage(path, bytes).collect { result ->
-                    if (result is NetworkResult.Success) {
-                        uploadedImageUrls.add(result.data)
+            // Collect destination info
+            destinationRepository.getDestinationById(destinationId).collect { result ->
+                if (result is NetworkResult.Success) {
+                    destinationName = result.data.name
+                    destinationImage = result.data.coverImage ?: ""
+                    
+                    // Now that we have destination info, proceed with upload and review submission
+                    val uploadedImageUrls = mutableListOf<String>()
+                    
+                    // Upload images
+                    if (images.isEmpty()) {
+                        submitFinalReview(destinationId, user.uid, user.fullName ?: "Traveler", user.photoUrl, rating, comment, emptyList(), destinationName, destinationImage)
+                    } else {
+                        var uploadedCount = 0
+                        images.forEach { bytes ->
+                            val timestamp = System.currentTimeMillis()
+                            val randomString = UUID.randomUUID().toString().take(6)
+                            val fileName = "${timestamp}_$randomString.jpg"
+                            val path = "reviews/$destinationId/$fileName"
+                            tripRepository.uploadImage(path, bytes).collect { uploadResult ->
+                                if (uploadResult is NetworkResult.Success) {
+                                    uploadedImageUrls.add(uploadResult.data)
+                                    uploadedCount++
+                                    if (uploadedCount == images.size) {
+                                        submitFinalReview(destinationId, user.uid, user.fullName ?: "Traveler", user.photoUrl, rating, comment, uploadedImageUrls, destinationName, destinationImage)
+                                    }
+                                } else if (uploadResult is NetworkResult.Error) {
+                                    _uiState.update { it.copy(isLoading = false, error = uploadResult.message) }
+                                }
+                            }
+                        }
                     }
+                } else if (result is NetworkResult.Error) {
+                    _uiState.update { it.copy(isLoading = false, error = "Không tìm thấy thông tin địa danh") }
                 }
             }
+        }
+    }
 
+    private fun submitFinalReview(
+        destinationId: String,
+        userId: String,
+        userName: String,
+        userPhotoUrl: String?,
+        rating: Float,
+        comment: String,
+        imageUrls: List<String>,
+        destinationName: String,
+        destinationImage: String
+    ) {
+        viewModelScope.launch {
             val review = Review(
                 destinationId = destinationId,
-                userId = user.uid,
-                userName = user.fullName ?: "Traveler",
-                userPhotoUrl = user.photoUrl,
+                userId = userId,
+                userName = userName,
+                userPhotoUrl = userPhotoUrl,
                 rating = rating,
                 comment = comment,
-                imageUrls = uploadedImageUrls
+                imageUrls = imageUrls,
+                destinationName = destinationName,
+                destinationImage = destinationImage
             )
 
             reviewRepository.addReview(review).collect { result ->

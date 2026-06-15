@@ -195,9 +195,10 @@ fun BudgetOverviewCard(spent: Double, budget: Double, threshold: Int) {
             Text(text = "Ngân sách tháng này", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
             Spacer(modifier = Modifier.height(16.dp))
             
-            val progress = if (budget > 0) (spent / budget).toFloat().coerceIn(0f, 2f) else 0f
-            val isOverThreshold = progress >= (threshold / 100f)
-            val isOverBudget = progress > 1f
+            val hasBudget = budget > 0
+            val progress = if (hasBudget) (spent / budget).toFloat().coerceIn(0f, 2f) else 0f
+            val isOverThreshold = hasBudget && progress >= (threshold / 100f)
+            val isOverBudget = hasBudget && progress > 1f
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column(modifier = Modifier.weight(1f)) {
@@ -213,10 +214,10 @@ fun BudgetOverviewCard(spent: Double, budget: Double, threshold: Int) {
                 }
                 Column(horizontalAlignment = Alignment.End, modifier = Modifier.weight(1f)) {
                     Text(
-                        text = try { String.format(Locale.US, "%,.0f đ", budget) } catch (e: Exception) { "0 đ" },
-                        fontSize = 16.sp, 
+                        text = if (hasBudget) try { String.format(Locale.US, "%,.0f đ", budget) } catch (e: Exception) { "0 đ" } else "Unset",
+                        fontSize = if (hasBudget) 16.sp else 18.sp, 
                         fontWeight = FontWeight.Bold, 
-                        color = MaterialTheme.colorScheme.onSurface,
+                        color = if (hasBudget) MaterialTheme.colorScheme.onSurface else OrangePrimary,
                         maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
@@ -241,7 +242,7 @@ fun BudgetOverviewCard(spent: Double, budget: Double, threshold: Int) {
             
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(
-                    text = "${(progress * 100).toInt()}% đã dùng",
+                    text = if (hasBudget) "${(progress * 100).toInt()}% đã dùng" else "Chưa thiết lập",
                     fontSize = 12.sp,
                     color = if (isOverBudget) Color.Red else GrayText
                 )
