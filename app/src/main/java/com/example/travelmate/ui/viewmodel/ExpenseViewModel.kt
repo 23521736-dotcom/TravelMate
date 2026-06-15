@@ -132,6 +132,12 @@ class ExpenseViewModel @Inject constructor(
             val userId = authRepository.getCurrentUser()?.uid ?: ""
             if (userId.isEmpty()) return@launch
 
+            val currentSpent = _uiState.value.currentMonthTotalVnd
+            if (amount <= currentSpent) {
+                _uiState.update { it.copy(error = "Ngân sách mới phải lớn hơn tổng chi tiêu hiện tại (${String.format(Locale.US, "%,.0f", currentSpent)} đ)") }
+                return@launch
+            }
+
             val newBudget = MonthlyBudget(
                 userId = userId,
                 month = currentMonth,
@@ -142,7 +148,7 @@ class ExpenseViewModel @Inject constructor(
 
             budgetRepository.saveMonthlyBudget(newBudget).collect { result ->
                 if (result is NetworkResult.Success) {
-                    _uiState.update { it.copy(monthlyBudget = newBudget) }
+                    _uiState.update { it.copy(monthlyBudget = newBudget, error = null) }
                     // Re-check threshold with new budget
                     checkBudgetThreshold(userId, _uiState.value.currentMonthTotalVnd)
                 } else if (result is NetworkResult.Error) {
@@ -150,6 +156,10 @@ class ExpenseViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    fun clearError() {
+        _uiState.update { it.copy(error = null) }
     }
 
     fun convertToVnd(amount: Double, currency: String?): Double {

@@ -10,6 +10,7 @@ import com.google.firebase.database.ValueEventListener
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.tasks.await
 import java.util.UUID
 import javax.inject.Inject
 
@@ -168,5 +169,35 @@ class ReviewRepositoryImpl @Inject constructor(
         }
 
         awaitClose()
+    }
+
+    override suspend fun updateUserInReviews(userId: String, newName: String, newPhotoUrl: String?) {
+        try {
+            val snapshot = userReviewsRef.child(userId).get().await()
+            if (snapshot.exists()) {
+                val updates = hashMapOf<String, Any?>()
+                snapshot.children.forEach { childSnapshot ->
+                    val reviewId = childSnapshot.key
+                    val destinationId = childSnapshot.child("destinationId").getValue(String::class.java)
+                    if (reviewId != null) {
+                        // Cập nhật trong user_reviews
+                        updates["user_reviews/$userId/$reviewId/userName"] = newName
+                        updates["user_reviews/$userId/$reviewId/userPhotoUrl"] = newPhotoUrl
+                        
+                        // Cập nhật trong reviews theo địa danh
+                        if (destinationId != null) {
+                            updates["reviews/$destinationId/$reviewId/userName"] = newName
+                            updates["reviews/$destinationId/$reviewId/userPhotoUrl"] = newPhotoUrl
+                        }
+                    }
+                }
+                if (updates.isNotEmpty()) {
+                    database.reference.updateChildren(updates).await()
+                    android.util.Log.d("ReviewRepo", "Successfully updated user info in ${updates.size / 2} review locations")
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("ReviewRepo", "Error updating user info in reviews: ${e.message}")
+        }
     }
 }

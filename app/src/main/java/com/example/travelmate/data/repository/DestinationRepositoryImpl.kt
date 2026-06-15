@@ -205,7 +205,7 @@ class DestinationRepositoryImpl @Inject constructor(
             val jsonString = inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
             val root = json.parseToJsonElement(jsonString).jsonObject
             val destinationsJson = root["destinations"]?.jsonObject
-            
+
             if (destinationsJson == null || destinationsJson.isEmpty()) {
                 trySend(NetworkResult.Error("Không tìm thấy dữ liệu trong file seed"))
                 close()
@@ -214,7 +214,7 @@ class DestinationRepositoryImpl @Inject constructor(
 
             val total = destinationsJson.size
             var count = 0
-            
+
             destinationsRef.removeValue().addOnCompleteListener {
                 destinationsJson.forEach { (key, value) ->
                     try {

@@ -64,7 +64,7 @@ class PlanTripViewModel @Inject constructor(
         }
     }
 
-    fun onTripNameChange(name: String) = _uiState.update { it.copy(tripName = name) }
+    fun onTripNameChange(name: String) = _uiState.update { it.copy(tripName = name, error = null) }
     
     fun onDestinationQueryChange(query: String) {
         val normalizedQuery = query.normalizeVietnamese()
@@ -74,7 +74,7 @@ class PlanTripViewModel @Inject constructor(
                 it.name.normalizeVietnamese().contains(normalizedQuery) || 
                 it.location.normalizeVietnamese().contains(normalizedQuery) 
             }
-            state.copy(destination = query, filteredDestinations = filtered)
+            state.copy(destination = query, filteredDestinations = filtered, error = null)
         }
     }
 
@@ -83,7 +83,8 @@ class PlanTripViewModel @Inject constructor(
             destination = dest.name, 
             destinationId = dest.id,
             coverImageUrl = dest.coverImage ?: dest.imageUrls.firstOrNull() ?: "",
-            filteredDestinations = emptyList() 
+            filteredDestinations = emptyList(),
+            error = null
         )}
     }
 
@@ -91,7 +92,7 @@ class PlanTripViewModel @Inject constructor(
 
     fun onDatesChange(start: String, end: String) {
         val duration = calculateDuration(start, end)
-        _uiState.update { it.copy(startDate = start, endDate = end, durationDays = duration) }
+        _uiState.update { it.copy(startDate = start, endDate = end, durationDays = duration, error = null) }
     }
 
     private fun calculateDuration(start: String, end: String): Int {
@@ -134,11 +135,26 @@ class PlanTripViewModel @Inject constructor(
                 return@launch
             }
 
-            val itinerary = mutableListOf<ItineraryDay>()
             val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.US)
+            val startDateLong: Long
+            val endDateLong: Long
+            try {
+                startDateLong = sdf.parse(state.startDate)!!.time
+                endDateLong = sdf.parse(state.endDate)!!.time
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = "Định dạng ngày không hợp lệ") }
+                return@launch
+            }
+
+            if (endDateLong < startDateLong) {
+                _uiState.update { it.copy(error = "Ngày kết thúc không được sớm hơn ngày bắt đầu") }
+                return@launch
+            }
+
+            val itinerary = mutableListOf<ItineraryDay>()
             try {
                 val startCal = Calendar.getInstance()
-                startCal.time = sdf.parse(state.startDate)!!
+                startCal.timeInMillis = startDateLong
                 
                 for (i in 1..state.durationDays) {
                     itinerary.add(ItineraryDay(
@@ -156,8 +172,8 @@ class PlanTripViewModel @Inject constructor(
                 destination = state.destination,
                 destinationId = state.destinationId,
                 description = state.description,
-                startDate = try { sdf.parse(state.startDate)!!.time } catch(e: Exception) { 0L },
-                endDate = try { sdf.parse(state.endDate)!!.time } catch(e: Exception) { 0L },
+                startDate = startDateLong,
+                endDate = endDateLong,
                 durationDays = state.durationDays,
                 budgetAmount = state.budgetAmount.toDoubleOrNull() ?: 0.0,
                 budgetLevel = state.budgetLevel,

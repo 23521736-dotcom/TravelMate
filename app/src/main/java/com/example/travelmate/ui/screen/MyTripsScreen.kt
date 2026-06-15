@@ -15,7 +15,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -267,15 +270,56 @@ fun DetailedTripCard(
                     }
                 }
 
+                // Gradient Overlay for text readability
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.5f)),
+                                startY = 100f
+                            )
+                        )
+                )
+
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .padding(16.dp)
                 ) {
-                    Text(text = title, color = Color.Black, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = title, 
+                        color = Color.White, 
+                        fontSize = 18.sp, 
+                        fontWeight = FontWeight.Bold,
+                        style = LocalTextStyle.current.copy(
+                            shadow = Shadow(
+                                color = Color.Black.copy(alpha = 0.5f),
+                                offset = Offset(1f, 1f),
+                                blurRadius = 4f
+                            )
+                        )
+                    )
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.Black.copy(alpha = 0.6f), modifier = Modifier.size(14.dp))
-                        Text(text = location, color = Color.Black.copy(alpha = 0.6f), fontSize = 12.sp)
+                        Icon(
+                            Icons.Default.LocationOn, 
+                            contentDescription = null, 
+                            tint = Color.White.copy(alpha = 0.9f), 
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = location, 
+                            color = Color.White.copy(alpha = 0.9f), 
+                            fontSize = 12.sp,
+                            style = LocalTextStyle.current.copy(
+                                shadow = Shadow(
+                                    color = Color.Black.copy(alpha = 0.5f),
+                                    offset = Offset(1f, 1f),
+                                    blurRadius = 2f
+                                )
+                            )
+                        )
                     }
                 }
 
@@ -303,15 +347,15 @@ fun DetailedTripCard(
                     Spacer(modifier = Modifier.width(8.dp))
                     Column {
                         Text(text = date, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                        Text(text = duration, fontSize = 10.sp, color = GrayText)
+                        Text(text = duration, fontSize = 11.sp, color = GrayText, fontWeight = FontWeight.Medium)
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Payments, contentDescription = null, tint = GrayText, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.Payments, contentDescription = null, tint = BluePrimary.copy(alpha = 0.7f), modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Column(horizontalAlignment = Alignment.End) {
-                        Text(text = "Budget", fontSize = 10.sp, color = GrayText)
-                        Text(text = budget, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                        Text(text = "Budget", fontSize = 10.sp, color = GrayText, fontWeight = FontWeight.Medium)
+                        Text(text = budget, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = BluePrimary)
                     }
                 }
             }

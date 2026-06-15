@@ -16,8 +16,8 @@ object EmailUtils {
     // Cấu hình SMTP (Thay đổi thông tin này cho phù hợp với tài khoản gửi của bạn)
     private const val SMTP_HOST = "smtp.gmail.com"
     private const val SMTP_PORT = "465"
-    private const val SENDER_EMAIL = "travelmate.app.contact@gmail.com"
-    private const val SENDER_PASSWORD = "vsqr hqdq kshz wuyr"
+    private const val SENDER_EMAIL = "buitung6705@gmail.com"
+    private const val SENDER_PASSWORD = "agaw gtdi fumz xhvp"
 
     suspend fun sendOtpEmail(recipientEmail: String, otp: String): Boolean = withContext(Dispatchers.IO) {
         val props = Properties().apply {

@@ -120,17 +120,21 @@ class AuthViewModel @Inject constructor(
         val trimmedPassword = password.trim()
         val trimmedName = name.trim()
         
+        if (trimmedEmail.isEmpty() || trimmedPassword.isEmpty() || trimmedName.isEmpty()) {
+            _uiState.update { it.copy(error = "Vui lòng điền đầy đủ thông tin") }
+            return
+        }
+
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             val result = signUpUseCase(trimmedEmail, trimmedPassword, trimmedName)
             when (result) {
                 is NetworkResult.Success -> {
-                    // Tạm thời hoàn tất đăng ký ngay lập tức
                     _uiState.update { it.copy(
                         isLoading = false, 
-                        isSuccess = true, 
-                        isRegistrationComplete = true,
-                        isAwaitingEmailVerification = false, 
+                        isSuccess = false, 
+                        isRegistrationComplete = false,
+                        isAwaitingEmailVerification = true,
                         user = result.data
                     ) }
                 }

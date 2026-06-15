@@ -5,6 +5,8 @@ import com.example.travelmate.data.local.PreferenceDataStore
 import com.example.travelmate.data.remote.SupabaseService
 import com.example.travelmate.data.repository.AuthRepositoryImpl
 import com.example.travelmate.domain.repository.AuthRepository
+import com.example.travelmate.domain.repository.ReviewRepository
+import com.example.travelmate.domain.repository.TripRepository
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.storage.FirebaseStorage
@@ -39,9 +41,20 @@ object AuthModule {
         database: FirebaseDatabase,
         preferenceDataStore: PreferenceDataStore,
         supabaseService: SupabaseService,
+        reviewRepository: ReviewRepository,
+        tripRepository: TripRepository,
         json: Json,
         @ApplicationContext context: Context
     ): AuthRepository {
-        return AuthRepositoryImpl(firebaseAuth, database, preferenceDataStore, supabaseService, json, context)
+        return AuthRepositoryImpl(
+            firebaseAuth, 
+            database, 
+            preferenceDataStore, 
+            supabaseService, 
+            reviewRepository, 
+            tripRepository, 
+            json, 
+            context
+        )
     }
 }

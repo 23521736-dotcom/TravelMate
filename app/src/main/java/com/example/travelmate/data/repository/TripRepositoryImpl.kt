@@ -314,7 +314,10 @@ class TripRepositoryImpl @Inject constructor(
                     val activityId = tripsRef.push().key ?: UUID.randomUUID().toString()
                     updatedActivities.add(activity.copy(id = activityId))
                     
-                    updatedItinerary[dayIndex] = day.copy(activities = updatedActivities)
+                    // Auto-sort activities by time
+                    val sortedActivities = updatedActivities.sortedBy { parseTimeHelper(it.time) }
+                    
+                    updatedItinerary[dayIndex] = day.copy(activities = sortedActivities)
                     
                     tripsRef.child(tripId).child("itinerary").setValue(updatedItinerary).await()
                     trySend(NetworkResult.Success(Unit))
@@ -342,7 +345,11 @@ class TripRepositoryImpl @Inject constructor(
                     val updatedActivities = day.activities.map { 
                         if (it.id == activity.id) activity else it
                     }
-                    updatedItinerary[dayIndex] = day.copy(activities = updatedActivities)
+                    
+                    // Auto-sort activities by time
+                    val sortedActivities = updatedActivities.sortedBy { parseTimeHelper(it.time) }
+                    
+                    updatedItinerary[dayIndex] = day.copy(activities = sortedActivities)
                     tripsRef.child(tripId).child("itinerary").setValue(updatedItinerary).await()
                     trySend(NetworkResult.Success(Unit))
                 } else {
@@ -355,6 +362,23 @@ class TripRepositoryImpl @Inject constructor(
             }
         }
         awaitClose()
+    }
+
+    private fun parseTimeHelper(timeStr: String): Int {
+        return try {
+            val parts = timeStr.uppercase().split(" ")
+            val timeParts = parts[0].split(":")
+            var hour = timeParts[0].toInt()
+            val minute = if (timeParts.size > 1) timeParts[1].toInt() else 0
+            val isPm = parts.size > 1 && (parts[1] == "CH" || parts[1] == "PM")
+            
+            if (isPm && hour < 12) hour += 12
+            if (!isPm && hour == 12) hour = 0
+            
+            hour * 60 + minute
+        } catch (e: Exception) {
+            0
+        }
     }
 
     override fun toggleActivityDone(tripId: String, dayIndex: Int, activityId: String): Flow<NetworkResult<Unit>> = callbackFlow {
@@ -820,7 +844,6 @@ class TripRepositoryImpl @Inject constructor(
     }
 
     override fun addTripLog(log: com.example.travelmate.domain.model.TripLog): Flow<NetworkResult<Unit>> = callbackFlow {
-        trySend(NetworkResult.Loading)
         val logId = tripLogsRef.child(log.tripId).push().key ?: UUID.randomUUID().toString()
         tripLogsRef.child(log.tripId).child(logId).setValue(log.copy(id = logId))
             .addOnSuccessListener {
@@ -832,5 +855,27 @@ class TripRepositoryImpl @Inject constructor(
                 close()
             }
         awaitClose()
+    }
+
+    override suspend fun updateUserInTripMembers(userId: String, newName: String, newPhotoUrl: String?) {
+        try {
+            val snapshot = userTripsRef.child(userId).get().await()
+            if (snapshot.exists()) {
+                val updates = hashMapOf<String, Any?>()
+                snapshot.children.forEach { childSnapshot ->
+                    val tripId = childSnapshot.key
+                    if (tripId != null) {
+                        updates["tripMembers/$tripId/$userId/userName"] = newName
+                        updates["tripMembers/$tripId/$userId/userPhotoUrl"] = newPhotoUrl
+                    }
+                }
+                if (updates.isNotEmpty()) {
+                    database.reference.updateChildren(updates).await()
+                    android.util.Log.d("TripRepo", "Successfully updated user info in ${updates.size / 2} trip member locations")
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("TripRepo", "Error updating user info in trip members: ${e.message}")
+        }
     }
 }

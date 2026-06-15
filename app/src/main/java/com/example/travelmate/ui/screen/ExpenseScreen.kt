@@ -30,6 +30,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.travelmate.domain.model.Expense
 import com.example.travelmate.ui.theme.*
 import com.example.travelmate.ui.viewmodel.ExpenseViewModel
+import kotlinx.coroutines.launch
 import java.util.*
 
 @Composable
@@ -39,23 +40,51 @@ fun ExpenseScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showBudgetDialog by remember { mutableStateOf(false) }
+    
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     if (showBudgetDialog) {
         SetBudgetDialog(
             currentAmount = uiState.monthlyBudget?.amount ?: 0.0,
             currentThreshold = uiState.monthlyBudget?.thresholdPercent ?: 80,
-            onDismiss = { showBudgetDialog = false },
+            error = uiState.error,
+            onDismiss = { 
+                showBudgetDialog = false
+                viewModel.clearError() // Need to add this to ViewModel
+            },
             onSave = { amount, threshold ->
                 viewModel.saveBudget(amount, threshold)
-                showBudgetDialog = false
             }
         )
     }
 
+    // Close dialog on success
+    LaunchedEffect(uiState.monthlyBudget) {
+        if (showBudgetDialog) {
+            showBudgetDialog = false
+        }
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
+            val budget = uiState.monthlyBudget?.amount ?: 0.0
+            val isOverBudget = budget > 0 && uiState.currentMonthTotalVnd >= budget
+
             FloatingActionButton(
-                onClick = onAddExpenseClick,
+                onClick = {
+                    if (isOverBudget) {
+                        scope.launch {
+                            snackbarHostState.showSnackbar(
+                                message = "Đã vượt quá ngân sách tháng! Vui lòng tăng ngân sách trong mục Cài đặt.",
+                                duration = SnackbarDuration.Short
+                            )
+                        }
+                    } else {
+                        onAddExpenseClick()
+                    }
+                },
                 containerColor = OrangePrimary,
                 contentColor = Color.White,
                 shape = CircleShape
@@ -418,6 +447,7 @@ fun ChartLegendItem(color: Color, label: String, percent: String) {
 fun SetBudgetDialog(
     currentAmount: Double,
     currentThreshold: Int,
+    error: String? = null,
     onDismiss: () -> Unit,
     onSave: (Double, Int) -> Unit
 ) {
@@ -461,6 +491,15 @@ fun SetBudgetDialog(
                         unfocusedTextColor = MaterialTheme.colorScheme.onSurface
                     )
                 )
+                
+                if (error != null) {
+                    Text(
+                        text = error,
+                        color = Color.Red,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
                 
                 Spacer(modifier = Modifier.height(32.dp))
                 

@@ -63,6 +63,7 @@ fun EditTripScreen(
     var description by remember { mutableStateOf("") }
     var startDate by remember { mutableStateOf("") }
     var endDate by remember { mutableStateOf("") }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
     
     var showWarningDialog by remember { mutableStateOf(false) }
     var lostDaysCount by remember { mutableIntStateOf(0) }
@@ -218,6 +219,15 @@ fun EditTripScreen(
                     focusedBorderColor = BluePrimary
                 )
             )
+
+            errorMessage?.let {
+                Text(
+                    text = it,
+                    color = Color.Red,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
             
             Spacer(modifier = Modifier.height(32.dp))
         }
@@ -232,6 +242,12 @@ fun EditTripScreen(
                         val newEnd = try { sdf.parse(endDate)?.time ?: 0L } catch (e: Exception) { 0L }
                         
                         if (newStart > 0 && newEnd > 0) {
+                            if (newEnd < newStart) {
+                                errorMessage = "Ngày kết thúc không được sớm hơn ngày bắt đầu"
+                                return@Button
+                            }
+                            errorMessage = null
+
                             val diff = newEnd - newStart
                             val newDuration = (diff / (1000 * 60 * 60 * 24)).toInt() + 1
                             

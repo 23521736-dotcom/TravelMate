@@ -9,4 +9,5 @@ interface ReviewRepository {
     fun getUserReviews(userId: String): Flow<NetworkResult<List<Review>>>
     fun addReview(review: Review): Flow<NetworkResult<Unit>>
     fun deleteReview(destinationId: String, reviewId: String): Flow<NetworkResult<Unit>>
+    suspend fun updateUserInReviews(userId: String, newName: String, newPhotoUrl: String?)
 }

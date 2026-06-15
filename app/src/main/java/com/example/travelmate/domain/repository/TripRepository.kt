@@ -38,4 +38,5 @@ interface TripRepository {
     // Audit Log
     fun getTripLogs(tripId: String): Flow<NetworkResult<List<com.example.travelmate.domain.model.TripLog>>>
     fun addTripLog(log: com.example.travelmate.domain.model.TripLog): Flow<NetworkResult<Unit>>
+    suspend fun updateUserInTripMembers(userId: String, newName: String, newPhotoUrl: String?)
 }

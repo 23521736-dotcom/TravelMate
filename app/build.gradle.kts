@@ -121,13 +121,13 @@ tasks.register("seed") {
     doLast {
         val dbUrl = "https://travelmate-app-7bcbc-default-rtdb.asia-southeast1.firebasedatabase.app/.json"
         val seedFile = file("src/main/assets/data/seed_data.json")
-        
+
         println("🚀 Đang nạp dữ liệu vào Firebase...")
-        
+
         val process = ProcessBuilder("curl", "-X", "PUT", "-d", "@${seedFile.absolutePath}", dbUrl)
             .redirectErrorStream(true)
             .start()
-            
+
         val result = process.inputStream.bufferedReader().readText()
         if (process.waitFor() == 0) {
             println("✅ Thành công! Đã nạp 50 địa danh lên Database.")

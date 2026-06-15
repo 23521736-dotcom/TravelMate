@@ -242,11 +242,6 @@ fun ProfileScreen(
             })
             MenuItem(icon = Icons.Default.Favorite, title = "Danh sách yêu thích", onClick = onWishlistClick)
             MenuItem(icon = Icons.Default.RateReview, title = "Đánh giá của tôi", onClick = onMyReviewsClick)
-            MenuItem(icon = Icons.Default.CloudDownload, title = "Nạp dữ liệu địa danh (Seed)", onClick = {
-                viewModel.seedDatabase(onSuccess = {
-                    homeViewModel.refreshData()
-                })
-            })
             MenuItem(icon = Icons.Default.Settings, title = "Cài đặt", onClick = onSettingsClick)
             MenuItem(icon = Icons.Default.Logout, title = "Đăng xuất", onClick = {
                 viewModel.logout()

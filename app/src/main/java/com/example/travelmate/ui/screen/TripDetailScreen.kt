@@ -52,6 +52,7 @@ import com.example.travelmate.domain.model.TripActivity
 import com.example.travelmate.ui.theme.*
 import com.example.travelmate.ui.viewmodel.TripDetailViewModel
 import com.example.travelmate.ui.screen.components.DetailCard
+import com.example.travelmate.ui.screen.components.ImageViewerDialog
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -100,6 +101,8 @@ fun TripDetailScreen(
     var showActivityDialog by remember { mutableStateOf(false) }
     var editingActivity by remember { mutableStateOf<TripActivity?>(null) }
     var selectedDayIndexForActivity by remember { mutableIntStateOf(0) }
+    
+    var selectedImageUrl by remember { mutableStateOf<String?>(null) }
 
     if (showDeleteDialog) {
         DeleteTripConfirmDialog(
@@ -325,12 +328,17 @@ fun TripDetailScreen(
                                     viewModel.addPhotos(byteArrayList)
                                 }
                             },
-                            onDeletePhoto = { url -> viewModel.deletePhoto(url) }
+                            onDeletePhoto = { url -> viewModel.deletePhoto(url) },
+                            onPhotoClick = { url -> selectedImageUrl = url }
                         )
                     }
                 }
             }
         }
+    }
+
+    selectedImageUrl?.let { url ->
+        ImageViewerDialog(imageUrl = url, onDismiss = { selectedImageUrl = null })
     }
 }
 
@@ -688,7 +696,7 @@ fun ExpensesTabContentHighFidelity(
 }
 
 @Composable
-fun PhotosTab(urls: List<String>, canEdit: Boolean, onAddPhotos: (List<String>) -> Unit, onDeletePhoto: (String) -> Unit) {
+fun PhotosTab(urls: List<String>, canEdit: Boolean, onAddPhotos: (List<String>) -> Unit, onDeletePhoto: (String) -> Unit, onPhotoClick: (String) -> Unit) {
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickMultipleVisualMedia(),
         onResult = { uris ->
@@ -724,7 +732,16 @@ fun PhotosTab(urls: List<String>, canEdit: Boolean, onAddPhotos: (List<String>) 
             LazyVerticalGrid(columns = GridCells.Fixed(3), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(urls) { url ->
                     Box(modifier = Modifier.aspectRatio(1f)) {
-                        AsyncImage(model = url, contentDescription = null, modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)).background(GrayBackground), contentScale = ContentScale.Crop)
+                        AsyncImage(
+                            model = url, 
+                            contentDescription = null, 
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(GrayBackground)
+                                .clickable { onPhotoClick(url) }, 
+                            contentScale = ContentScale.Crop
+                        )
                         if (canEdit) {
                             IconButton(
                                 onClick = { onDeletePhoto(url) },
@@ -991,15 +1008,6 @@ fun ActivityDialog(
                             val newTimeMinutes = parseTime(time)
                             if (newTimeMinutes == -1) {
                                 errorMessage = "Định dạng giờ không hợp lệ (vd: 09:00 SA)"
-                                return@Button
-                            }
-
-                            val conflict = existingActivities.any { 
-                                it.id != activity?.id && parseTime(it.time) >= newTimeMinutes 
-                            }
-
-                            if (conflict) {
-                                errorMessage = "Thời gian hoạt động không được sớm hơn hoặc trùng với các hoạt động đã có"
                                 return@Button
                             }
 
