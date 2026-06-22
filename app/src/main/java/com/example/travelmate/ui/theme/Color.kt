@@ -17,6 +17,7 @@ val GrayBackground = Color(0xFFF5F5F5)
 
 val PurplePrimary = Color(0xFF7E57C2)
 val PurpleDark = Color(0xFF5E35B1)
+val RedPrimary = Color(0xFFD32F2F)
 
 val Purple80 = Color(0xFFD0BCFF)
 val PurpleGrey80 = Color(0xFFCCC2DC)

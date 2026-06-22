@@ -33,4 +33,5 @@ interface AuthRepository {
     fun uploadImage(path: String, byteArray: ByteArray): Flow<NetworkResult<String>>
     suspend fun changePassword(oldPassword: String, newPassword: String): NetworkResult<Unit>
     fun observeUser(): Flow<User?>
+    fun listenToUserRealtime(uid: String): Flow<User?>
 }

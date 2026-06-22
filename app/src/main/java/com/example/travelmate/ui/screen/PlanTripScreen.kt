@@ -1,6 +1,5 @@
 package com.example.travelmate.ui.screen
 
-import android.app.DatePickerDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -33,6 +32,8 @@ import coil.compose.AsyncImage
 import com.example.travelmate.domain.model.Destination
 import com.example.travelmate.ui.theme.*
 import com.example.travelmate.ui.viewmodel.PlanTripViewModel
+import com.example.travelmate.ui.screen.components.showDatePicker
+import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
@@ -125,11 +126,26 @@ fun PlanTripScreen(
                 )
                 2 -> {
                     val context = LocalContext.current
+                    val sdf = remember { SimpleDateFormat("dd/MM/yyyy", Locale.US) }
+                    val minEndDate = remember(uiState.startDate) {
+                        try {
+                            if (uiState.startDate.isNotEmpty()) {
+                                // For "strictly greater", we can set minDate to start date + 1 day
+                                // However, DatePicker's minDate usually includes that date.
+                                // If we want strictly greater, we should add 24 hours.
+                                val startTime = sdf.parse(uiState.startDate)?.time ?: System.currentTimeMillis()
+                                startTime + (24 * 60 * 60 * 1000)
+                            } else System.currentTimeMillis()
+                        } catch (_: Exception) {
+                            System.currentTimeMillis()
+                        }
+                    }
+                    
                     StepDates(
                         uiState.startDate.ifEmpty { "Chọn ngày bắt đầu" }, 
-                        { showDatePicker(context) { viewModel.onDatesChange(it, uiState.endDate) } }, 
+                        { showDatePicker(context, System.currentTimeMillis()) { viewModel.onDatesChange(it, uiState.endDate) } }, 
                         uiState.endDate.ifEmpty { "Chọn ngày kết thúc" }, 
-                        { showDatePicker(context) { viewModel.onDatesChange(uiState.startDate, it) } },
+                        { showDatePicker(context, minEndDate) { viewModel.onDatesChange(uiState.startDate, it) } },
                         uiState.durationDays
                     )
                 }
@@ -566,16 +582,4 @@ fun ReviewItem(icon: ImageVector, label: String, value: String) {
     }
 }
 
-fun showDatePicker(context: android.content.Context, onDateSelected: (String) -> Unit) {
-    val calendar = Calendar.getInstance()
-    DatePickerDialog(
-        context,
-        { _, year, month, dayOfMonth ->
-            val formattedDate = String.format(Locale.US, "%02d/%02d/%d", dayOfMonth, month + 1, year)
-            onDateSelected(formattedDate)
-        },
-        calendar.get(Calendar.YEAR),
-        calendar.get(Calendar.MONTH),
-        calendar.get(Calendar.DAY_OF_MONTH)
-    ).show()
-}
+

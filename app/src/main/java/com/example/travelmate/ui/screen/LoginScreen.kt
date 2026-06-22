@@ -145,6 +145,7 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            /* 
             Text(
                 text = "hoặc tiếp tục với",
                 modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
@@ -161,6 +162,7 @@ fun LoginScreen(
                 Spacer(modifier = Modifier.width(16.dp))
                 SocialButton(icon = Icons.Default.Language)
             }
+            */
 
             Spacer(modifier = Modifier.height(24.dp))
 

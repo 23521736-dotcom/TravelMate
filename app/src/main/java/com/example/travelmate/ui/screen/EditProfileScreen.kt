@@ -199,7 +199,7 @@ fun EditProfileScreen(
                                     Spacer(modifier = Modifier.width(6.dp))
                                 }
                                 Text(
-                                    text = category.displayName, 
+                                    text = "${category.icon} ${category.displayName}",
                                     fontSize = 12.sp, 
                                     color = if (isSelected) BluePrimary else Color.White,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal

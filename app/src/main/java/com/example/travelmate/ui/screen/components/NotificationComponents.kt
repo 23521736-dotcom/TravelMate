@@ -27,6 +27,6 @@ fun getNotifConfig(type: String): NotifConfig {
 }
 
 fun formatTimestamp(timestamp: Long): String {
-    val sdf = SimpleDateFormat("HH:mm, dd MMM", Locale.US)
+    val sdf = SimpleDateFormat("HH:mm, dd/MM", Locale.US)
     return sdf.format(Date(timestamp))
 }

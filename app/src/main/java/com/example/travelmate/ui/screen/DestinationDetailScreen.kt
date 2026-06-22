@@ -210,7 +210,7 @@ fun DestinationDetailScreen(
                                 TagItem(text = "UNESCO Heritage", color = PurplePrimary)
                             }
                             destination.categories.forEach { category ->
-                                TagItem(text = category.displayName, color = BluePrimary)
+                                TagItem(text = "${category.icon} ${category.displayName}", color = BluePrimary)
                             }
                         }
 

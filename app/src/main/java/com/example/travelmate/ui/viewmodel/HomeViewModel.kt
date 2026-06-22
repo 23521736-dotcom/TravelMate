@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.travelmate.domain.model.Destination
 import com.example.travelmate.domain.model.Notification
+import com.example.travelmate.domain.model.Trip
 import com.example.travelmate.domain.model.User
 import com.example.travelmate.domain.repository.AuthRepository
 import com.example.travelmate.domain.repository.DestinationRepository
@@ -22,7 +23,7 @@ import javax.inject.Inject
 
 data class HomeUiState(
     val user: User? = null,
-    val ongoingTrip: com.example.travelmate.domain.model.Trip? = null,
+    val ongoingTrip: Trip? = null,
     val totalTrips: Int = 0,
     val totalSpent: Double = 0.0,
     val upcomingTrips: Int = 0,
@@ -118,11 +119,11 @@ class HomeViewModel @Inject constructor(
             tripRepository.getUserTrips(userId).collect { result ->
                 if (result is NetworkResult.Success) {
                     val trips = result.data
-                    val ongoing = trips.find { it.status == com.example.travelmate.domain.model.Trip.STATUS_ONGOING }
-                        ?: trips.filter { it.status == com.example.travelmate.domain.model.Trip.STATUS_UPCOMING }
+                    val ongoing = trips.find { it.status == Trip.STATUS_ONGOING }
+                        ?: trips.filter { it.status == Trip.STATUS_UPCOMING }
                             .minByOrNull { it.startDate }
                     
-                    val upcomingCount = trips.count { it.getCalculatedStatus() == com.example.travelmate.domain.model.Trip.STATUS_UPCOMING }
+                    val upcomingCount = trips.count { it.getCalculatedStatus() == Trip.STATUS_UPCOMING }
                     
                     _uiState.update { it.copy(
                         ongoingTrip = ongoing,
@@ -139,17 +140,21 @@ class HomeViewModel @Inject constructor(
         expensesJob = viewModelScope.launch {
             tripRepository.getAllExpenses(userId).collect { expResult ->
                 if (expResult is NetworkResult.Success) {
-                    val totalSpent = expResult.data.sumOf { exp ->
-                        val rate = when (exp.currency.uppercase()) {
-                            "USD" -> 25400.0
-                            "EUR" -> 27500.0
-                            "SGD" -> 18800.0
-                            "THB" -> 700.0
-                            else -> 1.0
+                    try {
+                        val totalSpent = expResult.data.sumOf { exp ->
+                            val rate = when (exp.currency.uppercase(java.util.Locale.ROOT)) {
+                                "USD" -> 25400.0
+                                "EUR" -> 27500.0
+                                "SGD" -> 18800.0
+                                "THB" -> 700.0
+                                else -> 1.0
+                            }
+                            exp.amount * rate
                         }
-                        exp.amount * rate
+                        _uiState.update { it.copy(totalSpent = totalSpent) }
+                    } catch (e: Exception) {
+                        android.util.Log.e("HomeVM", "Error calculating total spent", e)
                     }
-                    _uiState.update { it.copy(totalSpent = totalSpent) }
                 }
             }
         }
@@ -170,24 +175,27 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    private fun checkUpcomingTrips(userId: String, trips: List<com.example.travelmate.domain.model.Trip>) {
+    private fun checkUpcomingTrips(userId: String, trips: List<Trip>) {
+        // We want to handle new trips even if a job was already active, 
+        // but we only need one listener for notifications.
         if (notificationsJob?.isActive == true) return
         
         notificationsJob = viewModelScope.launch {
-            val now = System.currentTimeMillis()
-
-            // Get existing notifications to prevent duplicates
+            // Use a separate flow to monitor the trips list to ensure we always use latest
+            // However, for simplicity and since checkUpcomingTrips is called on trip updates,
+            // we will just collect notifications and check against the current trips in StateFlow.
+            
             notificationRepository.getUserNotifications(userId).collect { notifResult ->
                 if (notifResult is NetworkResult.Success) {
                     val existingNotifs = notifResult.data
+                    val now = System.currentTimeMillis()
                     
                     trips.forEach { trip ->
-                        if (trip.status == com.example.travelmate.domain.model.Trip.STATUS_UPCOMING) {
+                        if (trip.getCalculatedStatus() == Trip.STATUS_UPCOMING) {
                             val diff = trip.startDate - now
                             val days = diff / (1000 * 60 * 60 * 24)
                             
                             if (days in 0..3) {
-                                // Logic: Only notify if no "trip_start" notification for THIS trip exists in last 24h
                                 val alreadyNotified = existingNotifs.any { 
                                     it.type == "trip_start" && 
                                     it.tripId == trip.id && 
@@ -195,14 +203,17 @@ class HomeViewModel @Inject constructor(
                                 }
                                 
                                 if (!alreadyNotified) {
-                                    val notification = com.example.travelmate.domain.model.Notification(
+                                    val notification = Notification(
                                         userId = userId,
                                         title = "Chuyến đi sắp tới!",
                                         message = "Chuyến đi ${trip.name} của bạn sẽ bắt đầu trong $days ngày tới.",
                                         type = "trip_start",
                                         tripId = trip.id
                                     )
-                                    notificationRepository.addNotification(notification).collect { }
+                                    // Use launch to not block notification collection
+                                    launch {
+                                        notificationRepository.addNotification(notification).collect { }
+                                    }
                                 }
                             }
                         }

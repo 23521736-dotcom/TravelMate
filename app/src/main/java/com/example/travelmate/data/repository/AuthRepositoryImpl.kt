@@ -17,6 +17,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.channels.awaitClose
+import com.google.firebase.database.ValueEventListener
+import com.google.firebase.database.DatabaseError
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
@@ -161,6 +165,7 @@ class AuthRepositoryImpl @Inject constructor(
                 location = snapshot.child("location").getValue(String::class.java),
                 displayName = snapshot.child("displayName").getValue(String::class.java),
                 isBlocked = snapshot.child("isBlocked").getValue(Boolean::class.java) ?: false,
+                blockedReason = snapshot.child("blockedReason").getValue(String::class.java),
                 totalTrips = safeInt(snapshot.child("totalTrips")),
                 totalSpent = safeDouble(snapshot.child("totalSpent")),
                 upcomingTrips = safeInt(snapshot.child("upcomingTrips")),
@@ -223,7 +228,7 @@ class AuthRepositoryImpl @Inject constructor(
                 val authResult = firebaseAuth.createUserWithEmailAndPassword(trimmedEmail, password).await()
                 val uid = authResult.user?.uid ?: return@withContext NetworkResult.Error("Lỗi tạo user")
                 
-                val newUser = User(uid = uid, email = trimmedEmail, fullName = name)
+                val newUser = User(uid = uid, email = trimmedEmail, fullName = name, password = password)
                 usersRef.child(uid).setValue(newUser).await()
                 pendingRegRef.child(emailKey).removeValue()
                 preferenceDataStore.saveUser(newUser)
@@ -306,14 +311,24 @@ class AuthRepositoryImpl @Inject constructor(
             val expiry = snapshot.child("expiry").getValue(Long::class.java) ?: 0L
             
             if (storedOtp == otp && System.currentTimeMillis() < expiry) {
+                // 1. Cập nhật mật khẩu vào Database (Theo yêu cầu của bạn)
+                val userSnapshot = usersRef.orderByChild("email").equalTo(trimmedEmail).get().await()
+                val uid = userSnapshot.children.firstOrNull()?.key
+                if (uid != null) {
+                    usersRef.child(uid).child("password").setValue(newPassword).await()
+                }
+
+                // 2. Gửi email đặt lại mật khẩu của Firebase (Bắt buộc để Firebase Auth cập nhật mật khẩu đăng nhập)
+                // Lưu ý: Người dùng VẪN PHẢI nhấn vào link trong email này để có thể đăng nhập bằng mật khẩu mới.
                 firebaseAuth.sendPasswordResetEmail(trimmedEmail).await()
+
                 database.getReference("otps").child(emailKey).removeValue()
                 NetworkResult.Success(Unit)
             } else {
-                NetworkResult.Error("Xác thực không hợp lệ hoặc đã hết hạn")
+                NetworkResult.Error("Mã xác thực không hợp lệ hoặc đã hết hạn")
             }
         } catch (e: Exception) {
-            NetworkResult.Error("Lỗi đặt lại mật khẩu: ${e.message}")
+            NetworkResult.Error("Lỗi: ${e.message}")
         }
     }
 
@@ -324,6 +339,25 @@ class AuthRepositoryImpl @Inject constructor(
     }
 
     override fun observeUser(): Flow<User?> = preferenceDataStore.currentUser
+
+    override fun listenToUserRealtime(uid: String): Flow<User?> = callbackFlow {
+        val userRef = usersRef.child(uid)
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val user = mapSnapshotToUser(snapshot, uid)
+                // Sync to local data store as well
+                repositoryScope.launch {
+                    preferenceDataStore.saveUser(user)
+                }
+                trySend(user)
+            }
+            override fun onCancelled(error: DatabaseError) {
+                close(error.toException())
+            }
+        }
+        userRef.addValueEventListener(listener)
+        awaitClose { userRef.removeEventListener(listener) }
+    }
 
     override fun logout() {
         firebaseAuth.signOut()

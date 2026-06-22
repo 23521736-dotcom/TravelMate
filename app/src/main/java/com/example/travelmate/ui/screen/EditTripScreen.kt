@@ -120,7 +120,7 @@ fun EditTripScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(text = "Edit Trip", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            Text(text = "Chỉnh sửa chuyến đi", fontSize = 24.sp, fontWeight = FontWeight.Bold)
             IconButton(
                 onClick = onCloseClick,
                 modifier = Modifier.clip(CircleShape).background(GrayBackground)
@@ -137,11 +137,11 @@ fun EditTripScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp)
         ) {
-            EditField(label = "TRIP NAME", value = tripName, onValueChange = { tripName = it })
-            EditField(label = "DESTINATION", value = destination, onValueChange = { destination = it })
-            EditField(label = "BUDGET (VND)", value = budget, onValueChange = { budget = it })
+            EditField(label = "TÊN CHUYẾN ĐI", value = tripName, onValueChange = { tripName = it })
+            EditField(label = "ĐIỂM ĐẾN", value = destination, onValueChange = { destination = it })
+            EditField(label = "NGÂN SÁCH (VND)", value = budget, onValueChange = { budget = it })
 
-            Text(text = "VISIBILITY", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = GrayText, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
+            Text(text = "CHẾ ĐỘ HIỂN THỊ", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = GrayText, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 val visOptions = listOf(
                     com.example.travelmate.domain.model.Trip.VISIBILITY_PRIVATE to "Riêng tư",
@@ -158,7 +158,7 @@ fun EditTripScreen(
             }
 
             if (trip?.visibility != com.example.travelmate.domain.model.Trip.VISIBILITY_PRIVATE) {
-                Text(text = "SHARING", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = GrayText, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
+                Text(text = "CHIA SẺ", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = GrayText, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
                 DetailCard {
                     Column {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -173,10 +173,20 @@ fun EditTripScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                val sdfDate = remember { SimpleDateFormat("dd/MM/yyyy", Locale.US) }
+                val minEndDate = remember(startDate) {
+                    try {
+                        if (startDate.isNotEmpty()) {
+                            val startTime = sdfDate.parse(startDate)?.time ?: 0L
+                            startTime + (24 * 60 * 60 * 1000)
+                        } else 0L
+                    } catch (_: Exception) { 0L }
+                }
+
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("START DATE", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = GrayText, modifier = Modifier.padding(bottom = 8.dp))
+                    Text("NGÀY BẮT ĐẦU", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = GrayText, modifier = Modifier.padding(bottom = 8.dp))
                     OutlinedButton(
-                        onClick = { showDatePicker(context) { startDate = it } },
+                        onClick = { showDatePicker(context, null) { startDate = it } },
                         modifier = Modifier.fillMaxWidth().height(56.dp),
                         shape = RoundedCornerShape(12.dp)
                     ) {
@@ -184,9 +194,9 @@ fun EditTripScreen(
                     }
                 }
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("END DATE", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = GrayText, modifier = Modifier.padding(bottom = 8.dp))
+                    Text("NGÀY KẾT THÚC", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = GrayText, modifier = Modifier.padding(bottom = 8.dp))
                     OutlinedButton(
-                        onClick = { showDatePicker(context) { endDate = it } },
+                        onClick = { showDatePicker(context, if (minEndDate > 0) minEndDate else null) { endDate = it } },
                         modifier = Modifier.fillMaxWidth().height(56.dp),
                         shape = RoundedCornerShape(12.dp)
                     ) {
@@ -195,19 +205,19 @@ fun EditTripScreen(
                 }
             }
 
-            Text(text = "STATUS", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = GrayText, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
+            Text(text = "TRẠNG THÁI", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = GrayText, modifier = Modifier.padding(top = 16.dp, bottom = 8.dp))
             androidx.compose.foundation.layout.FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 maxItemsInEachRow = 2
             ) {
-                StatusChip("Upcoming", status == "upcoming") { status = "upcoming" }
-                StatusChip("Ongoing", status == "ongoing") { status = "ongoing" }
-                StatusChip("Done", status == "done") { status = "done" }
-                StatusChip("Cancelled", status == "cancelled") { status = "cancelled" }
+                StatusChip("Sắp tới", status == "upcoming") { status = "upcoming" }
+                StatusChip("Đang đi", status == "ongoing") { status = "ongoing" }
+                StatusChip("Hoàn thành", status == "done") { status = "done" }
+                StatusChip("Đã hủy", status == "cancelled") { status = "cancelled" }
             }
 
-            Text(text = "DESCRIPTION", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = GrayText, modifier = Modifier.padding(top = 24.dp, bottom = 8.dp))
+            Text(text = "MÔ TẢ", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = GrayText, modifier = Modifier.padding(top = 24.dp, bottom = 8.dp))
             OutlinedTextField(
                 value = description,
                 onValueChange = { description = it },
@@ -242,8 +252,8 @@ fun EditTripScreen(
                         val newEnd = try { sdf.parse(endDate)?.time ?: 0L } catch (e: Exception) { 0L }
                         
                         if (newStart > 0 && newEnd > 0) {
-                            if (newEnd < newStart) {
-                                errorMessage = "Ngày kết thúc không được sớm hơn ngày bắt đầu"
+                            if (newEnd <= newStart) {
+                                errorMessage = "Ngày kết thúc phải sau ngày bắt đầu"
                                 return@Button
                             }
                             errorMessage = null
@@ -283,7 +293,7 @@ fun EditTripScreen(
             ) {
                 Icon(Icons.Default.Check, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(text = "Save Changes", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text(text = "Lưu thay đổi", fontWeight = FontWeight.Bold, fontSize = 16.sp)
             }
         } else {
             Text(

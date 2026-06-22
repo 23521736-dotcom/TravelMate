@@ -204,10 +204,12 @@ fun ForgotPasswordScreen(
                                     AuthButton(
                                         text = "Đổi mật khẩu",
                                         onClick = { 
-                                            if (newPassword == confirmPassword) {
+                                            if (newPassword.length < 8) {
+                                                viewModel.setError("Mật khẩu phải có ít nhất 8 ký tự")
+                                            } else if (newPassword == confirmPassword) {
                                                 viewModel.resetPassword(email, newPassword)
                                             } else {
-                                                // AuthViewModel logic handles it or we could add local validation
+                                                viewModel.setError("Mật khẩu xác nhận không khớp")
                                             }
                                         },
                                         color = GreenHeader

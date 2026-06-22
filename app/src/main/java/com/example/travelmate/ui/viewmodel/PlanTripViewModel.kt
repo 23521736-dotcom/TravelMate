@@ -104,7 +104,7 @@ class PlanTripViewModel @Inject constructor(
             if (startDate != null && endDate != null) {
                 val diff = endDate.time - startDate.time
                 val days = (diff / (1000 * 60 * 60 * 24)).toInt() + 1
-                if (days > 0) days else 1
+                if (days > 1) days else if (endDate.time > startDate.time) 2 else 0
             } else 0
         } catch (e: Exception) {
             0
@@ -146,8 +146,8 @@ class PlanTripViewModel @Inject constructor(
                 return@launch
             }
 
-            if (endDateLong < startDateLong) {
-                _uiState.update { it.copy(error = "Ngày kết thúc không được sớm hơn ngày bắt đầu") }
+            if (endDateLong <= startDateLong) {
+                _uiState.update { it.copy(error = "Ngày kết thúc phải sau ngày bắt đầu") }
                 return@launch
             }
 

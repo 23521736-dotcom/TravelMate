@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.example.travelmate.domain.model.Destination
+import com.example.travelmate.domain.model.User
 import com.example.travelmate.ui.theme.*
 import com.example.travelmate.ui.viewmodel.AuthViewModel
 import com.example.travelmate.ui.viewmodel.HomeViewModel
@@ -61,7 +62,7 @@ fun HomeScreen(
             .verticalScroll(rememberScrollState())
     ) {
         // Header & Search Area
-        HomeHeader(user?.fullName ?: "Guest", onProfileClick, onNotificationsClick, onSearchClick)
+        HomeHeader(user, onProfileClick, onNotificationsClick, onSearchClick)
 
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
             // Promo Card
@@ -78,21 +79,21 @@ fun HomeScreen(
                     modifier = Modifier.weight(1f),
                     icon = Icons.Default.FlightTakeoff,
                     value = uiState.totalTrips.toString(),
-                    label = "Trips",
+                    label = "Chuyến đi",
                     color = BluePrimary
                 )
                 StatCard(
                     modifier = Modifier.weight(1f),
                     icon = Icons.Default.Payments,
                     value = String.format(Locale.US, "%.1fM", uiState.totalSpent / 1000000),
-                    label = "Spent",
+                    label = "Đã chi",
                     color = OrangePrimary
                 )
                 StatCard(
                     modifier = Modifier.weight(1f),
                     icon = Icons.Default.TrendingUp,
                     value = uiState.upcomingTrips.toString(),
-                    label = "Upcoming",
+                    label = "Sắp tới",
                     color = GreenPrimary
                 )
             }
@@ -108,7 +109,7 @@ fun HomeScreen(
             Spacer(modifier = Modifier.height(24.dp))
             
             // Section: Top Destinations
-            SectionHeader(title = "Điểm đến hàng đầu", actionText = "Xem tất cả")
+            SectionHeader(title = "Điểm đến hàng đầu", actionText = "")
             Spacer(modifier = Modifier.height(16.dp))
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -122,7 +123,7 @@ fun HomeScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             // Section: Recommended for You (Based on Interests)
-            SectionHeader(title = "Gợi ý cho bạn", actionText = "Xem thêm")
+            SectionHeader(title = "Gợi ý cho bạn", actionText = "")
             Spacer(modifier = Modifier.height(8.dp))
             
             val userInterests = user?.interests ?: emptyList()
@@ -152,7 +153,10 @@ fun HomeScreen(
 }
 
 @Composable
-fun HomeHeader(userName: String, onProfileClick: () -> Unit, onNotificationsClick: () -> Unit, onSearchClick: () -> Unit) {
+fun HomeHeader(user: User?, onProfileClick: () -> Unit, onNotificationsClick: () -> Unit, onSearchClick: () -> Unit) {
+    val userName = user?.fullName ?: "Khách"
+    val photoUrl = user?.photoUrl
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -179,7 +183,16 @@ fun HomeHeader(userName: String, onProfileClick: () -> Unit, onNotificationsClic
                     color = PurplePrimary
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Text(text = userName.firstOrNull()?.toString() ?: "U", color = Color.White, fontWeight = FontWeight.Bold)
+                        if (photoUrl != null) {
+                            AsyncImage(
+                                model = photoUrl,
+                                contentDescription = "Ảnh đại diện",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                            )
+                        } else {
+                            Text(text = userName.firstOrNull()?.toString() ?: "U", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
@@ -326,9 +339,11 @@ fun SectionHeader(title: String, actionText: String) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(text = title, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(text = actionText, fontSize = 13.sp, color = BluePrimary, fontWeight = FontWeight.Bold)
-            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = BluePrimary, modifier = Modifier.size(16.dp))
+        if (actionText.isNotEmpty()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(text = actionText, fontSize = 13.sp, color = BluePrimary, fontWeight = FontWeight.Bold)
+                Icon(Icons.Default.ChevronRight, contentDescription = null, tint = BluePrimary, modifier = Modifier.size(16.dp))
+            }
         }
     }
 }
@@ -371,13 +386,13 @@ fun RecommendationCard(destination: Destination, onClick: () -> Unit) {
                 Spacer(modifier = Modifier.height(8.dp))
                 
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    destination.categories.take(3).forEach { category ->
+                    for (category in destination.categories.take(3)) {
                         Surface(
                             color = BluePrimary.copy(alpha = 0.1f),
                             shape = RoundedCornerShape(4.dp)
                         ) {
                             Text(
-                                text = category.displayName,
+                                text = "${category.icon} ${category.displayName}",
                                 color = BluePrimary,
                                 fontSize = 10.sp,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)

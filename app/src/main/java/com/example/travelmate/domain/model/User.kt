@@ -13,6 +13,7 @@ data class User(
     val location: String? = null,
     val displayName: String? = null,
     val isBlocked: Boolean = false,
+    val blockedReason: String? = null,
     val totalTrips: Int = 0,
     val totalSpent: Double = 0.0,
     val upcomingTrips: Int = 0,

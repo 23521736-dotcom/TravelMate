@@ -140,16 +140,23 @@ fun StatusChip(text: String, isSelected: Boolean, onClick: () -> Unit) {
     }
 }
 
-fun showDatePicker(context: android.content.Context, onDateSelected: (String) -> Unit) {
+fun showDatePicker(
+    context: android.content.Context, 
+    minDate: Long? = null,
+    onDateSelected: (String) -> Unit
+) {
     val calendar = Calendar.getInstance()
     val year = calendar.get(Calendar.YEAR)
     val month = calendar.get(Calendar.MONTH)
     val day = calendar.get(Calendar.DAY_OF_MONTH)
 
-    android.app.DatePickerDialog(context, { _, y, m, d ->
+    val dialog = android.app.DatePickerDialog(context, { _, y, m, d ->
         val selectedCalendar = Calendar.getInstance()
         selectedCalendar.set(y, m, d)
         val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.US)
         onDateSelected(sdf.format(selectedCalendar.time))
-    }, year, month, day).show()
+    }, year, month, day)
+    
+    minDate?.let { dialog.datePicker.minDate = it }
+    dialog.show()
 }

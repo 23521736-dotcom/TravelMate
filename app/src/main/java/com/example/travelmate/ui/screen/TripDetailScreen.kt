@@ -95,7 +95,7 @@ fun TripDetailScreen(
 
     var showDeleteDialog by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Overview", "Itinerary", "Expenses", "Photos")
+    val tabs = listOf("Tổng quan", "Lịch trình", "Chi tiêu", "Ảnh")
 
     // State to trigger Add/Edit Activity dialog
     var showActivityDialog by remember { mutableStateOf(false) }
@@ -212,7 +212,14 @@ fun TripDetailScreen(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Surface(color = GreenPrimary, shape = RoundedCornerShape(8.dp)) {
-                            Text(text = trip?.status?.uppercase() ?: "UPCOMING", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
+                            val statusText = when(trip?.status?.uppercase()) {
+                                "UPCOMING" -> "SẮP TỚI"
+                                "ONGOING" -> "ĐANG ĐI"
+                                "COMPLETED" -> "HOÀN THÀNH"
+                                "CANCELLED" -> "ĐÃ HỦY"
+                                else -> trip?.status?.uppercase() ?: "SẮP TỚI"
+                            }
+                            Text(text = statusText, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
                         }
                         uiState.currentUserMember?.let { member ->
                             Spacer(modifier = Modifier.width(8.dp))
@@ -348,19 +355,19 @@ fun OverviewTab(trip: com.example.travelmate.domain.model.Trip?, totalSpent: Dou
         // Budget Overview Card
         DetailCard {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(text = "Budget Overview", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+                Text(text = "Tổng quan ngân sách", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
                 Icon(Icons.Default.Payments, contentDescription = null, tint = OrangePrimary)
             }
             Spacer(modifier = Modifier.height(16.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
                 Column {
                     Text(text = String.format(Locale.US, "%,.1fM đ", totalSpent / 1000000), fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                    Text(text = "spent", fontSize = 12.sp, color = GrayText)
+                    Text(text = "đã chi", fontSize = 12.sp, color = GrayText)
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     val remaining = (trip?.budgetAmount ?: 0.0) - totalSpent
                     Text(text = String.format(Locale.US, "%,.1fM đ", if (remaining > 0) remaining / 1000000 else 0.0), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = GreenPrimary)
-                    Text(text = "remaining", fontSize = 12.sp, color = GrayText)
+                    Text(text = "còn lại", fontSize = 12.sp, color = GrayText)
                 }
             }
             Spacer(modifier = Modifier.height(12.dp))
@@ -372,8 +379,8 @@ fun OverviewTab(trip: com.example.travelmate.domain.model.Trip?, totalSpent: Dou
                 trackColor = GrayBackground
             )
             Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(text = "${(progress * 100).toInt()}% used", fontSize = 10.sp, color = GrayText)
-                Text(text = "Budget: ${String.format(Locale.US, "%,.1fM đ", (trip?.budgetAmount ?: 0.0) / 1000000)}", fontSize = 10.sp, color = GrayText)
+                Text(text = "${(progress * 100).toInt()}% đã dùng", fontSize = 10.sp, color = GrayText)
+                Text(text = "Ngân sách: ${String.format(Locale.US, "%,.1fM đ", (trip?.budgetAmount ?: 0.0) / 1000000)}", fontSize = 10.sp, color = GrayText)
             }
         }
 
@@ -381,7 +388,7 @@ fun OverviewTab(trip: com.example.travelmate.domain.model.Trip?, totalSpent: Dou
 
         // Spending Breakdown
         DetailCard {
-            Text(text = "Spending Breakdown", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+            Text(text = "Thống kê chi tiêu", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
             Spacer(modifier = Modifier.height(20.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 SpendingDonutChart(modifier = Modifier.size(100.dp), expenses = expenses)
@@ -392,7 +399,7 @@ fun OverviewTab(trip: com.example.travelmate.domain.model.Trip?, totalSpent: Dou
                     val colors = listOf(OrangePrimary, BluePrimary, PurplePrimary, GreenPrimary, Color.Magenta)
                     
                     if (sortedCategories.isEmpty()) {
-                        Text(text = "No expenses yet", fontSize = 12.sp, color = GrayText)
+                        Text(text = "Chưa có chi tiêu", fontSize = 12.sp, color = GrayText)
                     } else {
                         sortedCategories.take(4).forEachIndexed { index, entry ->
                             BreakdownItem(
@@ -412,17 +419,17 @@ fun OverviewTab(trip: com.example.travelmate.domain.model.Trip?, totalSpent: Dou
         DetailCard {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column {
-                    Text(text = "Weather in ${trip?.destination?.split(",")?.firstOrNull() ?: ""}", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text(text = "Thời tiết tại ${trip?.destination?.split(",")?.firstOrNull() ?: ""}", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     Text(text = "Dự báo cho chuyến đi", fontSize = 12.sp, color = GrayText)
                 }
                 Icon(Icons.Default.Cloud, contentDescription = null, tint = BluePrimary, modifier = Modifier.size(32.dp))
             }
             Spacer(modifier = Modifier.height(16.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                WeatherDayItem("Mon", "24°C", Icons.Default.WbSunny, Color(0xFFFBC02D))
-                WeatherDayItem("Tue", "22°C", Icons.Default.Cloud, BluePrimary)
-                WeatherDayItem("Wed", "25°C", Icons.Default.WbSunny, Color(0xFFFBC02D))
-                WeatherDayItem("Thu", "21°C", Icons.Default.Thunderstorm, GrayText)
+                WeatherDayItem("Th 2", "24°C", Icons.Default.WbSunny, Color(0xFFFBC02D))
+                WeatherDayItem("Th 3", "22°C", Icons.Default.Cloud, BluePrimary)
+                WeatherDayItem("Th 4", "25°C", Icons.Default.WbSunny, Color(0xFFFBC02D))
+                WeatherDayItem("Th 5", "21°C", Icons.Default.Thunderstorm, GrayText)
             }
         }
 
@@ -430,11 +437,11 @@ fun OverviewTab(trip: com.example.travelmate.domain.model.Trip?, totalSpent: Dou
 
         // Quick Actions
         if (canEdit) {
-            Text(text = "Quick Actions", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+            Text(text = "Thao tác nhanh", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
             Spacer(modifier = Modifier.height(12.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                ActionBtn(modifier = Modifier.weight(1f), icon = Icons.Default.Paid, label = "Add Expense", color = OrangeLight, tint = OrangePrimary, onClick = onAddExpense)
-                ActionBtn(modifier = Modifier.weight(1f), icon = Icons.Default.AddLocationAlt, label = "Add Activity", color = GreenLight, tint = GreenPrimary, onClick = onAddActivity)
+                ActionBtn(modifier = Modifier.weight(1f), icon = Icons.Default.Paid, label = "Thêm chi tiêu", color = OrangeLight, tint = OrangePrimary, onClick = onAddExpense)
+                ActionBtn(modifier = Modifier.weight(1f), icon = Icons.Default.AddLocationAlt, label = "Thêm hoạt động", color = GreenLight, tint = GreenPrimary, onClick = onAddActivity)
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -461,8 +468,8 @@ fun OverviewTab(trip: com.example.travelmate.domain.model.Trip?, totalSpent: Dou
             Spacer(modifier = Modifier.height(24.dp))
         }
 
-        Text(text = "About This Trip", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
-        Text(text = trip?.description ?: "No description provided.", fontSize = 14.sp, color = GrayText, modifier = Modifier.padding(top = 8.dp))
+        Text(text = "Về chuyến đi này", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+        Text(text = trip?.description ?: "Chưa có mô tả.", fontSize = 14.sp, color = GrayText, modifier = Modifier.padding(top = 8.dp))
     }
 }
 
@@ -510,16 +517,16 @@ fun ItineraryTab(
             }
 
             itinerary.getOrNull(selectedDayIndex)?.let { currentDay ->
-                val dateStr = SimpleDateFormat("MMM dd, yyyy", Locale.US).format(Date(currentDay.date))
+                val dateStr = SimpleDateFormat("dd/MM/yyyy", Locale.US).format(Date(currentDay.date))
                 Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Column {
                         Text(text = dateStr, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurface)
-                        Text(text = "Day ${currentDay.dayNumber} • ${currentDay.activities.size} activities", fontSize = 12.sp, color = GrayText)
+                        Text(text = "Ngày ${currentDay.dayNumber} • ${currentDay.activities.size} hoạt động", fontSize = 12.sp, color = GrayText)
                     }
                     if (canEdit) {
                         Button(onClick = { onAddActivityClick(selectedDayIndex) }, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = BluePrimary)) {
                             Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
-                            Text(" Add", color = Color.White)
+                            Text(" Thêm", color = Color.White)
                         }
                     }
                 }
@@ -581,12 +588,12 @@ fun TimelineActivityItem(activity: TripActivity, canEdit: Boolean, onToggleDone:
                         } else {
                             Icon(
                                 imageVector = when(activity.type) {
-                                    "Transport" -> Icons.Default.DirectionsCar
-                                    "Food" -> Icons.Default.Restaurant
-                                    "Stay" -> Icons.Default.Hotel
-                                    "Shopping" -> Icons.Default.ShoppingBag
-                                    "Leisure" -> Icons.Default.BeachAccess
-                                    "Sightseeing" -> Icons.Default.Museum
+                                    "Di chuyển" -> Icons.Default.DirectionsCar
+                                    "Ăn uống" -> Icons.Default.Restaurant
+                                    "Lưu trú" -> Icons.Default.Hotel
+                                    "Mua sắm" -> Icons.Default.ShoppingBag
+                                    "Thư giãn" -> Icons.Default.BeachAccess
+                                    "Tham quan" -> Icons.Default.Museum
                                     else -> Icons.Default.Map
                                 },
                                 contentDescription = null,
@@ -625,10 +632,10 @@ fun ExpensesTabContentHighFidelity(
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column {
                     Text(text = String.format(Locale.US, "%,.1fM đ", totalSpent / 1000000), fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                    Text(text = "total spent • ${expenses.size} transactions", fontSize = 11.sp, color = GrayText)
+                    Text(text = "tổng chi • ${expenses.size} giao dịch", fontSize = 11.sp, color = GrayText)
                 }
                 val remaining = (trip?.budgetAmount ?: 0.0) - totalSpent
-                Text(text = String.format(Locale.US, "%,.1fM đ left", if (remaining > 0) remaining / 1000000 else 0.0), color = GreenPrimary, fontWeight = FontWeight.Bold)
+                Text(text = String.format(Locale.US, "%,.1fM đ còn lại", if (remaining > 0) remaining / 1000000 else 0.0), color = GreenPrimary, fontWeight = FontWeight.Bold)
             }
             Spacer(modifier = Modifier.height(12.dp))
             LinearProgressIndicator(
@@ -641,7 +648,7 @@ fun ExpensesTabContentHighFidelity(
 
         Spacer(modifier = Modifier.height(24.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text(text = "By Category", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+            Text(text = "Theo danh mục", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
             if (canEdit) {
                 Button(onClick = onAddClick, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary)) {
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
@@ -708,7 +715,7 @@ fun PhotosTab(urls: List<String>, canEdit: Boolean, onAddPhotos: (List<String>) 
 
     Column(modifier = Modifier.fillMaxSize().padding(20.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text(text = "Gallery", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Text(text = "Bộ sưu tập", fontWeight = FontWeight.Bold, fontSize = 18.sp)
             if (canEdit) {
                 Button(
                     onClick = { 
@@ -720,7 +727,7 @@ fun PhotosTab(urls: List<String>, canEdit: Boolean, onAddPhotos: (List<String>) 
                     colors = ButtonDefaults.buttonColors(containerColor = BluePrimary)
                 ) {
                     Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Text(" Upload")
+                    Text(" Tải lên")
                 }
             }
         }
@@ -906,13 +913,13 @@ fun ActivityDialog(
     )
 
     val types = listOf(
-        "Sightseeing" to Icons.Default.Museum,
-        "Food" to Icons.Default.Restaurant,
-        "Activity" to Icons.Default.LocalActivity,
-        "Transport" to Icons.Default.DirectionsCar,
-        "Shopping" to Icons.Default.ShoppingBag,
-        "Leisure" to Icons.Default.BeachAccess,
-        "Stay" to Icons.Default.Hotel
+        "Tham quan" to Icons.Default.Museum,
+        "Ăn uống" to Icons.Default.Restaurant,
+        "Hoạt động" to Icons.Default.LocalActivity,
+        "Di chuyển" to Icons.Default.DirectionsCar,
+        "Mua sắm" to Icons.Default.ShoppingBag,
+        "Thư giãn" to Icons.Default.BeachAccess,
+        "Lưu trú" to Icons.Default.Hotel
     )
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -923,7 +930,7 @@ fun ActivityDialog(
             Column(modifier = Modifier.padding(24.dp).verticalScroll(rememberScrollState())) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Column {
-                        Text(if (activity == null) "Add Activity" else "Edit Activity", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                        Text(if (activity == null) "Thêm hoạt động" else "Chỉnh sửa hoạt động", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                         Text(dayInfo, fontSize = 12.sp, color = GrayText)
                     }
                     IconButton(onClick = onDismiss, modifier = Modifier.clip(CircleShape).background(MaterialTheme.colorScheme.background)) {
@@ -952,13 +959,13 @@ fun ActivityDialog(
                     } else {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, tint = GrayText, modifier = Modifier.size(40.dp))
-                            Text("Add Activity Image", color = GrayText, fontSize = 12.sp)
+                            Text("Thêm ảnh hoạt động", color = GrayText, fontSize = 12.sp)
                         }
                     }
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
-                Text("ACTIVITY TYPE", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = GrayText)
+                Text("LOẠI HOẠT ĐỘNG", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = GrayText)
                 Spacer(modifier = Modifier.height(12.dp))
                 
                 androidx.compose.foundation.layout.FlowRow(
@@ -986,10 +993,10 @@ fun ActivityDialog(
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
-                DialogTextField(label = "TIME (HH:mm SA/CH)", value = time, onValueChange = { if (canEdit) { time = it; errorMessage = null } }, icon = Icons.Default.AccessTime)
-                DialogTextField(label = "ACTIVITY NAME *", value = title, onValueChange = { if (canEdit) title = it }, placeholder = "e.g. Visit Ha Long Cave")
-                DialogTextField(label = "LOCATION", value = location, onValueChange = { if (canEdit) location = it }, placeholder = "e.g. Ha Long Bay")
-                DialogTextField(label = "NOTES", value = note, onValueChange = { if (canEdit) note = it }, placeholder = "Optional notes...")
+                DialogTextField(label = "THỜI GIAN (HH:mm SA/CH)", value = time, onValueChange = { if (canEdit) { time = it; errorMessage = null } }, icon = Icons.Default.AccessTime)
+                DialogTextField(label = "TÊN HOẠT ĐỘNG *", value = title, onValueChange = { if (canEdit) title = it }, placeholder = "vd: Tham quan Vịnh Hạ Long")
+                DialogTextField(label = "ĐỊA ĐIỂM", value = location, onValueChange = { if (canEdit) location = it }, placeholder = "vd: Vịnh Hạ Long")
+                DialogTextField(label = "GHI CHÚ", value = note, onValueChange = { if (canEdit) note = it }, placeholder = "Ghi chú thêm...")
 
                 if (errorMessage != null) {
                     Text(text = errorMessage!!, color = MaterialTheme.colorScheme.error, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
@@ -1030,7 +1037,7 @@ fun ActivityDialog(
                     ) {
                         Icon(if (activity == null) Icons.Default.Add else Icons.Default.Save, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(if (activity == null) "Add Activity" else "Save Changes", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Text(if (activity == null) "Thêm hoạt động" else "Lưu thay đổi", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     }
                 } else {
                     Text(text = "Chế độ xem chi tiết", color = GrayText, fontSize = 12.sp, modifier = Modifier.align(Alignment.CenterHorizontally))

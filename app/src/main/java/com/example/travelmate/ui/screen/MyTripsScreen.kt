@@ -36,8 +36,8 @@ fun MyTripsScreen(
     viewModel: TripViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val filters = listOf("All", "Upcoming", "Ongoing", "Completed")
-    var selectedFilter by remember { mutableStateOf("All") }
+    val filters = listOf("Tất cả", "Sắp tới", "Đang đi", "Hoàn thành")
+    var selectedFilter by remember { mutableStateOf("Tất cả") }
     var searchQuery by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
@@ -58,7 +58,7 @@ fun MyTripsScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column {
-                Text(text = "My Trips", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                Text(text = "Chuyến đi của tôi", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                 Text(text = "${uiState.trips.size} chuyến đi", fontSize = 14.sp, color = GrayText)
             }
             Row {
@@ -66,7 +66,7 @@ fun MyTripsScreen(
                     Icon(Icons.Default.Refresh, contentDescription = null, tint = GrayText)
                 }
                 IconButton(onClick = onJoinTripClick) {
-                    Icon(Icons.Default.GroupAdd, contentDescription = "Join Trip", tint = BluePrimary)
+                    Icon(Icons.Default.GroupAdd, contentDescription = "Tham gia chuyến đi", tint = BluePrimary)
                 }
                 Surface(
                     onClick = onAddTripClick,
@@ -141,9 +141,9 @@ fun MyTripsScreen(
             } else {
                 val filteredTrips = uiState.trips.filter { trip ->
                     val matchesFilter = when (selectedFilter) {
-                        "Upcoming" -> trip.status == com.example.travelmate.domain.model.Trip.STATUS_UPCOMING
-                        "Ongoing" -> trip.status == com.example.travelmate.domain.model.Trip.STATUS_ONGOING
-                        "Completed" -> trip.status == com.example.travelmate.domain.model.Trip.STATUS_COMPLETED
+                        "Sắp tới" -> trip.status == com.example.travelmate.domain.model.Trip.STATUS_UPCOMING
+                        "Đang đi" -> trip.status == com.example.travelmate.domain.model.Trip.STATUS_ONGOING
+                        "Hoàn thành" -> trip.status == com.example.travelmate.domain.model.Trip.STATUS_COMPLETED
                         else -> true
                     }
                     val matchesSearch = trip.name.contains(searchQuery, ignoreCase = true) || 
@@ -354,7 +354,7 @@ fun DetailedTripCard(
                     Icon(Icons.Default.Payments, contentDescription = null, tint = BluePrimary.copy(alpha = 0.7f), modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Column(horizontalAlignment = Alignment.End) {
-                        Text(text = "Budget", fontSize = 10.sp, color = GrayText, fontWeight = FontWeight.Medium)
+                        Text(text = "Ngân sách", fontSize = 10.sp, color = GrayText, fontWeight = FontWeight.Medium)
                         Text(text = budget, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = BluePrimary)
                     }
                 }
@@ -364,6 +364,6 @@ fun DetailedTripCard(
 }
 
 fun formatDateRange(start: Long, end: Long): String {
-    val sdf = java.text.SimpleDateFormat("MMM dd", java.util.Locale.US)
+    val sdf = java.text.SimpleDateFormat("dd/MM", java.util.Locale.US)
     return "${sdf.format(java.util.Date(start))} - ${sdf.format(java.util.Date(end))}"
 }
