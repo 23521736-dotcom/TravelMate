@@ -1,6 +1,7 @@
 package com.example.travelmate.util
 
 import android.util.Log
+import com.example.travelmate.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Properties
@@ -16,8 +17,8 @@ object EmailUtils {
     // Cấu hình SMTP (Thay đổi thông tin này cho phù hợp với tài khoản gửi của bạn)
     private const val SMTP_HOST = "smtp.gmail.com"
     private const val SMTP_PORT = "465"
-    private const val SENDER_EMAIL = "buitung6705@gmail.com"
-    private const val SENDER_PASSWORD = "agaw gtdi fumz xhvp"
+    private val SENDER_EMAIL = BuildConfig.SENDER_EMAIL
+    private val SENDER_PASSWORD = BuildConfig.SENDER_PASSWORD
 
     suspend fun sendOtpEmail(recipientEmail: String, otp: String): Boolean = withContext(Dispatchers.IO) {
         val props = Properties().apply {

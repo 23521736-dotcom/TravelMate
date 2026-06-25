@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.hilt)
@@ -11,6 +14,13 @@ android {
     namespace = "com.example.travelmate"
     compileSdk = 35
 
+    // Load local.properties
+    val localProperties = Properties()
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        localProperties.load(FileInputStream(localPropertiesFile))
+    }
+
     defaultConfig {
         applicationId = "com.example.travelmate"
         minSdk = 24
@@ -19,6 +29,10 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Add secrets to BuildConfig
+        buildConfigField("String", "SENDER_EMAIL", "\"${localProperties.getProperty("SENDER_EMAIL") ?: ""}\"")
+        buildConfigField("String", "SENDER_PASSWORD", "\"${localProperties.getProperty("SENDER_PASSWORD") ?: ""}\"")
     }
 
     buildTypes {
