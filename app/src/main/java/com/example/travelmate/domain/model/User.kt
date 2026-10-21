@@ -1,12 +1,13 @@
 package com.example.travelmate.domain.model
 
+import com.google.firebase.firestore.Exclude
 import kotlinx.serialization.Serializable
 
 @Serializable
 data class User(
     val uid: String = "",
     val email: String = "",
-    val password: String = "",
+    @get:Exclude val password: String = "",
     val fullName: String? = null,
     val photoUrl: String? = null,
     val bio: String? = null,

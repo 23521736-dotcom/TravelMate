@@ -33,6 +33,9 @@ android {
         // Add secrets to BuildConfig
         buildConfigField("String", "SENDER_EMAIL", "\"${localProperties.getProperty("SENDER_EMAIL") ?: ""}\"")
         buildConfigField("String", "SENDER_PASSWORD", "\"${localProperties.getProperty("SENDER_PASSWORD") ?: ""}\"")
+        buildConfigField("String", "GROQ_API_KEY", "\"${localProperties.getProperty("GROQ_API_KEY") ?: ""}\"")
+        buildConfigField("String", "SUPABASE_KEY", "\"${localProperties.getProperty("SUPABASE_KEY") ?: ""}\"")
+        buildConfigField("String", "GEOAPIFY_API_KEY", "\"${localProperties.getProperty("GEOAPIFY_API_KEY") ?: "fc415480b8b0473790661a20b28ac855"}\"")
     }
 
     buildTypes {
@@ -84,7 +87,7 @@ dependencies {
     // Firebase
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
-    implementation(libs.firebase.database)
+    implementation(libs.firebase.firestore)
     implementation(libs.firebase.storage)
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.appcheck)
@@ -123,26 +126,4 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
-}
-
-tasks.register("seed") {
-    group = "help"
-    description = "Nạp dữ liệu 50 địa danh từ seed_data.json vào Firebase"
-    doLast {
-        val dbUrl = "https://travelmate-app-7bcbc-default-rtdb.asia-southeast1.firebasedatabase.app/.json"
-        val seedFile = file("src/main/assets/data/seed_data.json")
-
-        println("🚀 Đang nạp dữ liệu vào Firebase...")
-
-        val process = ProcessBuilder("curl", "-X", "PUT", "-d", "@${seedFile.absolutePath}", dbUrl)
-            .redirectErrorStream(true)
-            .start()
-
-        val result = process.inputStream.bufferedReader().readText()
-        if (process.waitFor() == 0) {
-            println("✅ Thành công! Đã nạp 50 địa danh lên Database.")
-        } else {
-            println("❌ Lỗi: $result")
-        }
-    }
 }

@@ -1,6 +1,6 @@
 package com.example.travelmate.domain.model
 
-import com.google.firebase.database.PropertyName
+import com.google.firebase.firestore.PropertyName
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -17,6 +17,6 @@ data class Notification(
     @get:PropertyName("imageUrl") @set:PropertyName("imageUrl") var imageUrl: String? = null,
     @get:PropertyName("actionUrl") @set:PropertyName("actionUrl") var actionUrl: String? = null
 ) {
-    @get:com.google.firebase.database.Exclude
+    @get:com.google.firebase.firestore.Exclude
     val isRead: Boolean get() = read
 }

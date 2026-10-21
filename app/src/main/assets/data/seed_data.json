@@ -955,5 +955,125 @@
       "avgPricePerDay": 1500000.0,
       "imageUrls": ["https://images.unsplash.com/photo-1543160732-211598feafad"]
     }
+  },
+  "reviews": {
+    "landmark_02": {
+      "rev_01": {
+        "id": "rev_01",
+        "destinationId": "landmark_02",
+        "userId": "alex_at_travelmate_com",
+        "userName": "Alex Nguyen",
+        "userPhotoUrl": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde",
+        "rating": 5.0,
+        "comment": "Vịnh Hạ Long đẹp tuyệt vời! Cảnh quan thiên nhiên kỳ vĩ, du thuyền dịch vụ rất tốt.",
+        "destinationName": "Vịnh Hạ Long",
+        "destinationImage": "https://images.unsplash.com/photo-1528127269322-539801943592",
+        "createdAt": 1740326400000,
+        "imageUrls": ["https://images.unsplash.com/photo-1528127269322-539801943592"]
+      },
+      "rev_02": {
+        "id": "rev_02",
+        "destinationId": "landmark_02",
+        "userId": "minh_traveler",
+        "userName": "Minh Trần",
+        "userPhotoUrl": "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61",
+        "rating": 4.5,
+        "comment": "Trải nghiệm chèo thuyền kayak qua các hang động rất thú vị, thời tiết cực kỳ đẹp.",
+        "destinationName": "Vịnh Hạ Long",
+        "destinationImage": "https://images.unsplash.com/photo-1528127269322-539801943592",
+        "createdAt": 1740240000000,
+        "imageUrls": []
+      }
+    },
+    "landmark_05": {
+      "rev_03": {
+        "id": "rev_03",
+        "destinationId": "landmark_05",
+        "userId": "lan_nguyen",
+        "userName": "Lan Nguyễn",
+        "userPhotoUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330",
+        "rating": 5.0,
+        "comment": "Phố cổ Hội An về đêm lung linh ánh đèn lồng. Đồ ăn đặc sản Cao Lầu và Mì Quảng rất ngon!",
+        "destinationName": "Phố cổ Hội An",
+        "destinationImage": "https://images.unsplash.com/photo-1583417319070-4a69db38a482",
+        "createdAt": 1740153600000,
+        "imageUrls": ["https://images.unsplash.com/photo-1583417319070-4a69db38a482"]
+      }
+    },
+    "landmark_13": {
+      "rev_04": {
+        "id": "rev_04",
+        "destinationId": "landmark_13",
+        "userId": "alex_at_travelmate_com",
+        "userName": "Alex Nguyen",
+        "userPhotoUrl": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde",
+        "rating": 4.5,
+        "comment": "Không khí Đà Lạt trong lành dễ chịu, cảnh quan lãng mạn thích hợp cho chuyến đi ngắn ngày.",
+        "destinationName": "Thung lũng Tình Yêu",
+        "destinationImage": "https://images.unsplash.com/photo-1589308078059-be1415eab4c3",
+        "createdAt": 1740067200000,
+        "imageUrls": []
+      }
+    },
+    "landmark_01": {
+      "rev_05": {
+        "id": "rev_05",
+        "destinationId": "landmark_01",
+        "userId": "hoang_khang",
+        "userName": "Hoàng Khang",
+        "userPhotoUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d",
+        "rating": 5.0,
+        "comment": "Kiến trúc độc đáo mang đậm dấu ấn lịch sử văn hóa Việt Nam ngay trung tâm Hà Nội.",
+        "destinationName": "Chùa Một Cột",
+        "destinationImage": "https://images.unsplash.com/photo-1555944804-84585002429e",
+        "createdAt": 1739980800000,
+        "imageUrls": []
+      }
+    },
+    "landmark_06": {
+      "rev_06": {
+        "id": "rev_06",
+        "destinationId": "landmark_06",
+        "userId": "trang_pham",
+        "userName": "Thu Trang",
+        "userPhotoUrl": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80",
+        "rating": 5.0,
+        "comment": "Chinh phục nóc nhà Đông Dương Fansipan cực kỳ mãn nhãn. Biển mây bạt ngàn tuyệt đẹp!",
+        "destinationName": "Fansipan",
+        "destinationImage": "https://images.unsplash.com/photo-1509030450996-93525bbbf67d",
+        "createdAt": 1739894400000,
+        "imageUrls": ["https://images.unsplash.com/photo-1509030450996-93525bbbf67d"]
+      }
+    },
+    "landmark_31": {
+      "rev_07": {
+        "id": "rev_07",
+        "destinationId": "landmark_31",
+        "userId": "alex_at_travelmate_com",
+        "userName": "Alex Nguyen",
+        "userPhotoUrl": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde",
+        "rating": 5.0,
+        "comment": "Hồ Gươm sáng sớm rất yên bình. Đi dạo quanh hồ và uống cà phê trứng là trải nghiệm không thể bỏ qua.",
+        "destinationName": "Hồ Gươm",
+        "destinationImage": "https://images.unsplash.com/photo-1555944804-84585002429e",
+        "createdAt": 1739808000000,
+        "imageUrls": []
+      }
+    },
+    "landmark_20": {
+      "rev_08": {
+        "id": "rev_08",
+        "destinationId": "landmark_20",
+        "userId": "minh_tran",
+        "userName": "Minh Trần",
+        "userPhotoUrl": "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61",
+        "rating": 4.8,
+        "comment": "Cầu Vàng Bà Nà Hills rất hoành tráng. Không gian rộng rãi, nhiều góc chụp ảnh sống ảo đỉnh cao.",
+        "destinationName": "Cầu Vàng (Bà Nà Hills)",
+        "destinationImage": "https://images.unsplash.com/photo-1559592413-7ce8513ee95f",
+        "createdAt": 1739721600000,
+        "imageUrls": ["https://images.unsplash.com/photo-1559592413-7ce8513ee95f"]
+      }
+    }
   }
 }

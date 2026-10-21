@@ -73,4 +73,22 @@ object NetworkModule {
     fun provideGroqApiService(retrofit: Retrofit): GroqApiService {
         return retrofit.create(GroqApiService::class.java)
     }
+
+    @Provides
+    @Singleton
+    @javax.inject.Named("GeoapifyRetrofit")
+    fun provideGeoapifyRetrofit(okHttpClient: OkHttpClient, json: Json): Retrofit {
+        val contentType = "application/json".toMediaType()
+        return Retrofit.Builder()
+            .baseUrl("https://api.geoapify.com/")
+            .client(okHttpClient)
+            .addConverterFactory(json.asConverterFactory(contentType))
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideGeoapifyApiService(@javax.inject.Named("GeoapifyRetrofit") retrofit: Retrofit): com.example.travelmate.data.remote.GeoapifyApiService {
+        return retrofit.create(com.example.travelmate.data.remote.GeoapifyApiService::class.java)
+    }
 }

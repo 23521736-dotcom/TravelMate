@@ -364,6 +364,23 @@ class AuthViewModel @Inject constructor(
         _uiState.update { it.copy(error = message) }
     }
 
+    fun seedDestinationsAndReviews(onSuccess: () -> Unit = {}) {
+        viewModelScope.launch {
+            destinationRepository.seedDatabase().collect { result ->
+                when (result) {
+                    is NetworkResult.Loading -> _uiState.update { it.copy(isLoading = true) }
+                    is NetworkResult.Success -> {
+                        _uiState.update { it.copy(isLoading = false) }
+                        onSuccess()
+                    }
+                    is NetworkResult.Error -> {
+                        _uiState.update { it.copy(isLoading = false, error = result.message) }
+                    }
+                }
+            }
+        }
+    }
+
     fun seedDatabase(onSuccess: () -> Unit = {}) {
         viewModelScope.launch {
             destinationRepository.seedDatabase().collect { result ->

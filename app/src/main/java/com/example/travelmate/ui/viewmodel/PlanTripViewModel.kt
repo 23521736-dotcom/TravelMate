@@ -8,12 +8,15 @@ import com.example.travelmate.domain.model.Trip
 import com.example.travelmate.domain.repository.AuthRepository
 import com.example.travelmate.domain.repository.DestinationRepository
 import com.example.travelmate.domain.repository.TripRepository
+import com.example.travelmate.domain.repository.GeoapifyRepository
 import com.example.travelmate.util.NetworkResult
 import com.example.travelmate.util.normalizeVietnamese
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -44,11 +47,14 @@ data class PlanTripUiState(
 class PlanTripViewModel @Inject constructor(
     private val tripRepository: TripRepository,
     private val authRepository: AuthRepository,
-    private val destinationRepository: DestinationRepository
+    private val destinationRepository: DestinationRepository,
+    private val geoapifyRepository: GeoapifyRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PlanTripUiState())
     val uiState: StateFlow<PlanTripUiState> = _uiState.asStateFlow()
+
+    private var geoapifyJob: Job? = null
 
     init {
         fetchDestinations()
@@ -69,12 +75,27 @@ class PlanTripViewModel @Inject constructor(
     fun onDestinationQueryChange(query: String) {
         val normalizedQuery = query.normalizeVietnamese()
         _uiState.update { state ->
-            val filtered = if (query.isEmpty()) emptyList() 
+            val localFiltered = if (query.isEmpty()) emptyList() 
             else state.destinations.filter { 
                 it.name.normalizeVietnamese().contains(normalizedQuery) || 
                 it.location.normalizeVietnamese().contains(normalizedQuery) 
             }
-            state.copy(destination = query, filteredDestinations = filtered, error = null)
+            state.copy(destination = query, filteredDestinations = localFiltered, error = null)
+        }
+
+        geoapifyJob?.cancel()
+        val trimmed = query.trim()
+        if (trimmed.length >= 2) {
+            geoapifyJob = viewModelScope.launch {
+                geoapifyRepository.searchPlacesOnline(trimmed).collect { result ->
+                    if (result is NetworkResult.Success) {
+                        _uiState.update { state ->
+                            val currentFiltered = state.filteredDestinations.filter { !it.id.startsWith("geoapify_") }
+                            state.copy(filteredDestinations = (currentFiltered + result.data).distinctBy { it.id })
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -117,10 +138,9 @@ class PlanTripViewModel @Inject constructor(
 
     fun getDestinationById(id: String) {
         viewModelScope.launch {
-            destinationRepository.getDestinationById(id).collect { result ->
-                if (result is NetworkResult.Success) {
-                    selectDestination(result.data)
-                }
+            val result = destinationRepository.getDestinationById(id).first()
+            if (result is NetworkResult.Success) {
+                selectDestination(result.data)
             }
         }
     }

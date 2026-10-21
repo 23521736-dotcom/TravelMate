@@ -8,7 +8,7 @@ import com.example.travelmate.domain.repository.AuthRepository
 import com.example.travelmate.domain.repository.ReviewRepository
 import com.example.travelmate.domain.repository.TripRepository
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
 import dagger.Module
 import dagger.Provides
@@ -28,7 +28,7 @@ object AuthModule {
 
     @Provides
     @Singleton
-    fun provideFirebaseDatabase(): FirebaseDatabase = FirebaseDatabase.getInstance()
+    fun provideFirebaseFirestore(): FirebaseFirestore = FirebaseFirestore.getInstance()
 
     @Provides
     @Singleton
@@ -38,7 +38,7 @@ object AuthModule {
     @Singleton
     fun provideAuthRepository(
         firebaseAuth: FirebaseAuth,
-        database: FirebaseDatabase,
+        firestore: FirebaseFirestore,
         preferenceDataStore: PreferenceDataStore,
         supabaseService: SupabaseService,
         reviewRepository: ReviewRepository,
@@ -48,7 +48,7 @@ object AuthModule {
     ): AuthRepository {
         return AuthRepositoryImpl(
             firebaseAuth, 
-            database, 
+            firestore, 
             preferenceDataStore, 
             supabaseService, 
             reviewRepository, 

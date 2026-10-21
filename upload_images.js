@@ -11,12 +11,11 @@ const serviceAccount = require('./serviceAccountKey.json');
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  storageBucket: "travelmate-app-7bcbc.firebasestorage.app",
-  databaseURL: "https://travelmate-app-7bcbc-default-rtdb.asia-southeast1.firebasedatabase.app"
+  storageBucket: "travelmate-app-7bcbc.firebasestorage.app"
 });
 
 const bucket = admin.storage().bucket();
-const db = admin.database();
+const db = admin.firestore();
 
 const landmarks = [
   { id: "landmark_01", name: "Chùa Một Cột", query: "one pillar pagoda hanoi" },
@@ -100,7 +99,7 @@ async function downloadAndUpload(landmark) {
   }
 
   if (imageUrls.length > 0) {
-    await db.ref(`destinations/${landmark.id}/imageUrls`).set(imageUrls);
+    await db.collection('destinations').doc(landmark.id).set({ imageUrls }, { merge: true });
   }
 }
 

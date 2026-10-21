@@ -78,6 +78,42 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
+                text = "CƠ SỞ DỮ LIỆU",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = GrayText,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+
+            val authViewModel: com.example.travelmate.ui.viewmodel.AuthViewModel = hiltViewModel()
+            val authUiState by authViewModel.uiState.collectAsState()
+            val context = androidx.compose.ui.platform.LocalContext.current
+
+            SettingsMenuItem(
+                icon = Icons.Default.Place,
+                title = "Nạp địa danh & Đánh giá mẫu",
+                subtitle = if (authUiState.isLoading) "Đang tải dữ liệu..." else "50 Địa danh Việt Nam & Các đánh giá mẫu",
+                onClick = {
+                    authViewModel.seedDestinationsAndReviews {
+                        android.widget.Toast.makeText(context, "Đã nạp 50 địa danh và đánh giá mẫu vào Firestore!", android.widget.Toast.LENGTH_LONG).show()
+                    }
+                }
+            )
+
+            SettingsMenuItem(
+                icon = Icons.Default.CloudUpload,
+                title = "Nạp toàn bộ dữ liệu mẫu",
+                subtitle = if (authUiState.isLoading) "Đang tải dữ liệu..." else "Người dùng, Chuyến đi, Chi tiêu & Địa danh",
+                onClick = {
+                    authViewModel.seedDatabase {
+                        android.widget.Toast.makeText(context, "Đã nạp thành công toàn bộ dữ liệu vào Firestore!", android.widget.Toast.LENGTH_LONG).show()
+                    }
+                }
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Text(
                 text = "ỨNG DỤNG",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,

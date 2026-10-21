@@ -57,4 +57,10 @@ abstract class RepositoryModule {
     abstract fun bindReviewRepository(
         reviewRepositoryImpl: ReviewRepositoryImpl
     ): ReviewRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindGeoapifyRepository(
+        geoapifyRepositoryImpl: com.example.travelmate.data.repository.GeoapifyRepositoryImpl
+    ): com.example.travelmate.domain.repository.GeoapifyRepository
 }

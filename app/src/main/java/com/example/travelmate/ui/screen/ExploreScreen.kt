@@ -29,6 +29,7 @@ import com.example.travelmate.domain.model.Destination
 import com.example.travelmate.ui.theme.*
 import com.example.travelmate.ui.viewmodel.AuthViewModel
 import com.example.travelmate.ui.viewmodel.ExploreViewModel
+import com.example.travelmate.ui.viewmodel.SearchMode
 import com.example.travelmate.util.VoiceToTextParser
 
 @Composable
@@ -156,74 +157,144 @@ fun ExploreScreen(
             }
         }
 
+        // Search Mode Selector (when search query is present)
+        AnimatedVisibility(visible = uiState.searchQuery.isNotEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(
+                    selected = uiState.searchMode == SearchMode.ALL,
+                    onClick = { viewModel.onSearchModeSelect(SearchMode.ALL) },
+                    label = { Text("Tất cả", fontSize = 12.sp) }
+                )
+                FilterChip(
+                    selected = uiState.searchMode == SearchMode.GEOAPIFY_ONLINE,
+                    onClick = { viewModel.onSearchModeSelect(SearchMode.GEOAPIFY_ONLINE) },
+                    label = { Text("🌐 Geoapify API", fontSize = 12.sp) }
+                )
+                FilterChip(
+                    selected = uiState.searchMode == SearchMode.FIRESTORE_ONLY,
+                    onClick = { viewModel.onSearchModeSelect(SearchMode.FIRESTORE_ONLY) },
+                    label = { Text("💾 Firestore", fontSize = 12.sp) }
+                )
+            }
+        }
+
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 20.dp)
         ) {
-            // Categories
-            item {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.padding(bottom = 24.dp)
-                ) {
-                    items(categories) { category ->
-                        FilterChip(
-                            selected = category == uiState.selectedCategory,
-                            onClick = { viewModel.onCategorySelect(category) },
-                            label = { Text(category) },
-                            shape = RoundedCornerShape(20.dp),
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = BluePrimary,
-                                selectedLabelColor = Color.White
-                            ),
-                            border = FilterChipDefaults.filterChipBorder(
-                                enabled = true,
+            // Show Categories and Recent Searches only when no search query
+            if (uiState.searchQuery.isEmpty()) {
+                item {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(bottom = 24.dp)
+                    ) {
+                        items(categories) { category ->
+                            FilterChip(
                                 selected = category == uiState.selectedCategory,
-                                borderColor = GrayBorder,
-                                selectedBorderColor = BluePrimary
+                                onClick = { viewModel.onCategorySelect(category) },
+                                label = { Text(category) },
+                                shape = RoundedCornerShape(20.dp),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = BluePrimary,
+                                    selectedLabelColor = Color.White
+                                ),
+                                border = FilterChipDefaults.filterChipBorder(
+                                    enabled = true,
+                                    selected = category == uiState.selectedCategory,
+                                    borderColor = GrayBorder,
+                                    selectedBorderColor = BluePrimary
+                                )
                             )
+                        }
+                    }
+                }
+
+                item {
+                    Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+                        Text(text = "Tìm kiếm gần đây", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        recentSearches.forEach { search ->
+                            RecentSearchItem(text = search)
+                        }
+                    }
+                }
+            }
+
+            // GEOAPIFY ONLINE RESULTS SECTION
+            if (uiState.searchQuery.isNotEmpty() && (uiState.searchMode == SearchMode.ALL || uiState.searchMode == SearchMode.GEOAPIFY_ONLINE)) {
+                item {
+                    Row(
+                        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "🌐 Kết quả Online (Geoapify API)",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            color = BluePrimary,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (uiState.isGeoapifyLoading) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = BluePrimary)
+                        }
+                    }
+                }
+
+                if (uiState.geoapifyDestinations.isEmpty() && !uiState.isGeoapifyLoading) {
+                    item {
+                        Text(
+                            text = "Không tìm thấy địa điểm online cho '${uiState.searchQuery}'",
+                            fontSize = 13.sp,
+                            color = GrayText,
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                        )
+                    }
+                } else {
+                    items(uiState.geoapifyDestinations) { destination ->
+                        PopularDestinationCard(
+                            destination = destination,
+                            isWishlisted = wishlistIds.contains(destination.id),
+                            onWishlistToggle = { authViewModel.toggleWishlist(destination.id) },
+                            onClick = { onDestinationClick(destination.id) }
                         )
                     }
                 }
             }
 
-            // Recent Searches
-            item {
-                Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-                    Text(text = "Tìm kiếm gần đây", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
-                    Spacer(modifier = Modifier.height(12.dp))
-                    recentSearches.forEach { search ->
-                        RecentSearchItem(text = search)
-                    }
-                }
-            }
-
-            // Popular Destinations
-            item {
-                Text(
-                    text = "Địa điểm nổi bật",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 16.dp),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-
-            if (uiState.isLoading) {
+            // FIRESTORE RESULTS / POPULAR DESTINATIONS SECTION
+            if (uiState.searchMode == SearchMode.ALL || uiState.searchMode == SearchMode.FIRESTORE_ONLY) {
                 item {
-                    Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = BluePrimary)
-                    }
-                }
-            } else {
-                items(uiState.filteredDestinations) { destination ->
-                    PopularDestinationCard(
-                        destination = destination,
-                        isWishlisted = wishlistIds.contains(destination.id),
-                        onWishlistToggle = { authViewModel.toggleWishlist(destination.id) },
-                        onClick = { onDestinationClick(destination.id) }
+                    Text(
+                        text = if (uiState.searchQuery.isEmpty()) "Địa điểm nổi bật" else "💾 Kết quả CSDL Firestore",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 12.dp),
+                        color = MaterialTheme.colorScheme.onSurface
                     )
+                }
+
+                if (uiState.isLoading) {
+                    item {
+                        Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = BluePrimary)
+                        }
+                    }
+                } else {
+                    items(uiState.filteredDestinations) { destination ->
+                        PopularDestinationCard(
+                            destination = destination,
+                            isWishlisted = wishlistIds.contains(destination.id),
+                            onWishlistToggle = { authViewModel.toggleWishlist(destination.id) },
+                            onClick = { onDestinationClick(destination.id) }
+                        )
+                    }
                 }
             }
         }
@@ -301,6 +372,18 @@ fun PopularDestinationCard(
                                 text = "UNESCO",
                                 color = BluePrimary,
                                 fontSize = 10.sp,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                    if (destination.id.startsWith("geoapify_")) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(color = BluePrimary.copy(alpha = 0.15f), shape = RoundedCornerShape(4.dp)) {
+                            Text(
+                                text = "🌐 Geoapify",
+                                color = BluePrimary,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }

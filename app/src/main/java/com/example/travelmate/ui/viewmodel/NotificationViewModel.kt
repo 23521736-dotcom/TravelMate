@@ -10,6 +10,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -64,13 +65,12 @@ class NotificationViewModel @Inject constructor(
     fun fetchNotificationDetail(notifId: String) {
         viewModelScope.launch {
             val user = authRepository.getCurrentUser() ?: return@launch
-            notificationRepository.getUserNotifications(user.uid).collect { result ->
-                if (result is NetworkResult.Success) {
-                    val notif = result.data.find { it.id == notifId }
-                    _uiState.update { it.copy(selectedNotification = notif) }
-                    if (notif != null && !notif.isRead) {
-                        markAsRead(notifId)
-                    }
+            val result = notificationRepository.getUserNotifications(user.uid).first()
+            if (result is NetworkResult.Success) {
+                val notif = result.data.find { it.id == notifId }
+                _uiState.update { it.copy(selectedNotification = notif) }
+                if (notif != null && !notif.isRead) {
+                    markAsRead(notifId)
                 }
             }
         }

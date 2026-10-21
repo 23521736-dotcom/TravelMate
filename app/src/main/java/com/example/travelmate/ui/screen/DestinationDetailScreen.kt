@@ -206,6 +206,9 @@ fun DestinationDetailScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
+                            if (destination.id.startsWith("geoapify_")) {
+                                TagItem(text = "🌐 Geoapify Places", color = BluePrimary)
+                            }
                             if (destination.isUnesco) {
                                 TagItem(text = "UNESCO Heritage", color = PurplePrimary)
                             }

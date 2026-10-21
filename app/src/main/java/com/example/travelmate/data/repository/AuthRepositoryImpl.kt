@@ -1,26 +1,28 @@
 package com.example.travelmate.data.repository
 
+import android.content.Context
 import com.example.travelmate.data.local.PreferenceDataStore
 import com.example.travelmate.data.remote.SupabaseService
 import com.example.travelmate.domain.model.Category
+import com.example.travelmate.domain.model.Destination
 import com.example.travelmate.domain.model.User
 import com.example.travelmate.domain.repository.AuthRepository
 import com.example.travelmate.domain.repository.ReviewRepository
 import com.example.travelmate.domain.repository.TripRepository
 import com.example.travelmate.util.EmailUtils
 import com.example.travelmate.util.NetworkResult
+import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.database.DataSnapshot
-import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.channels.awaitClose
-import com.google.firebase.database.ValueEventListener
-import com.google.firebase.database.DatabaseError
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
@@ -28,13 +30,20 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.longOrNull
 import javax.inject.Inject
-import android.content.Context
 
 class AuthRepositoryImpl @Inject constructor(
     private val firebaseAuth: FirebaseAuth,
-    private val database: FirebaseDatabase,
+    private val firestore: FirebaseFirestore,
     private val preferenceDataStore: PreferenceDataStore,
     private val supabaseService: SupabaseService,
     private val reviewRepository: ReviewRepository,
@@ -44,9 +53,10 @@ class AuthRepositoryImpl @Inject constructor(
 ) : AuthRepository {
 
     private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val usersRef = database.getReference("users")
-    private val pendingRegRef = database.getReference("pending_registrations")
-    private val destinationsRef = database.getReference("destinations")
+    private val usersRef = firestore.collection("users")
+    private val pendingRegRef = firestore.collection("pending_registrations")
+    private val otpsRef = firestore.collection("otps")
+    private val destinationsRef = firestore.collection("destinations")
 
     private fun getEmailKey(email: String): String {
         return email.trim()
@@ -61,41 +71,38 @@ class AuthRepositoryImpl @Inject constructor(
     override suspend fun login(email: String, password: String): NetworkResult<User> = withContext(Dispatchers.IO) {
         val trimmedEmail = email.trim()
         val trimmedPassword = password.trim()
-        
+
         if (trimmedEmail.isEmpty() || trimmedPassword.isEmpty()) {
-            return@withContext NetworkResult.Error("Vui lòng nhập đầy đủ email và mật khẩu")
+            return@withContext NetworkResult.Error("Vui long nhap day du email va mat khau")
         }
-        
+
         try {
             val authResult = firebaseAuth.signInWithEmailAndPassword(trimmedEmail, trimmedPassword).await()
-            val firebaseUser = authResult.user
-            if (firebaseUser != null) {
-                val uid = firebaseUser.uid
-                val snapshot = usersRef.child(uid).get().await()
-                
-                if (snapshot.exists()) {
-                    val user = mapSnapshotToUser(snapshot, uid)
-                    if (user.isBlocked) {
-                        firebaseAuth.signOut()
-                        preferenceDataStore.clearUser()
-                        return@withContext NetworkResult.Error("Tài khoản của bạn đã bị khóa.")
-                    }
-                    preferenceDataStore.saveUser(user)
-                    NetworkResult.Success(user)
-                } else {
-                    val newUser = User(uid = uid, email = firebaseUser.email ?: trimmedEmail, fullName = "Traveler")
-                    usersRef.child(uid).setValue(newUser).await()
-                    preferenceDataStore.saveUser(newUser)
-                    NetworkResult.Success(newUser)
-                }
+            val firebaseUser = authResult.user ?: return@withContext NetworkResult.Error("Xac thuc that bai")
+            val uid = firebaseUser.uid
+            val snapshot = usersRef.document(uid).get().await()
+
+            val user = if (snapshot.exists()) {
+                mapDocumentToUser(snapshot, uid)
             } else {
-                NetworkResult.Error("Xác thực thất bại")
+                User(uid = uid, email = firebaseUser.email ?: trimmedEmail, fullName = "Traveler").also {
+                    usersRef.document(uid).set(it).await()
+                }
             }
+
+            if (user.isBlocked) {
+                firebaseAuth.signOut()
+                preferenceDataStore.clearUser()
+                return@withContext NetworkResult.Error("Tai khoan cua ban da bi khoa.")
+            }
+
+            preferenceDataStore.saveUser(user)
+            NetworkResult.Success(user)
         } catch (e: Exception) {
             val errorMsg = when {
-                e.message?.contains("user-not-found") == true -> "Tài khoản không tồn tại"
-                e.message?.contains("wrong-password") == true -> "Mật khẩu không chính xác"
-                else -> "Đăng nhập thất bại: ${e.message}"
+                e.message?.contains("user-not-found") == true -> "Tai khoan khong ton tai"
+                e.message?.contains("wrong-password") == true -> "Mat khau khong chinh xac"
+                else -> "Dang nhap that bai: ${e.message}"
             }
             NetworkResult.Error(errorMsg)
         }
@@ -104,76 +111,70 @@ class AuthRepositoryImpl @Inject constructor(
     override fun getUserProfile(uid: String): Flow<NetworkResult<User>> = flow {
         emit(NetworkResult.Loading)
         try {
-            val snapshot = usersRef.child(uid).get().await()
-            val user = mapSnapshotToUser(snapshot, uid)
+            val snapshot = usersRef.document(uid).get().await()
+            val user = mapDocumentToUser(snapshot, uid)
             if (user.isBlocked) {
                 firebaseAuth.signOut()
                 preferenceDataStore.clearUser()
-                emit(NetworkResult.Error("Tài khoản của bạn đã bị khóa."))
+                emit(NetworkResult.Error("Tai khoan cua ban da bi khoa."))
                 return@flow
             }
             preferenceDataStore.saveUser(user)
             emit(NetworkResult.Success(user))
         } catch (e: Exception) {
-            emit(NetworkResult.Error("Lỗi đồng bộ dữ liệu: ${e.message}"))
+            emit(NetworkResult.Error("Loi dong bo du lieu: ${e.message}"))
         }
     }
 
-    private fun mapSnapshotToUser(snapshot: DataSnapshot, uid: String): User {
-        try {
-            if (!snapshot.exists()) {
-                return User(uid = uid, email = firebaseAuth.currentUser?.email ?: "", fullName = "Thành viên mới")
+    private fun mapDocumentToUser(document: DocumentSnapshot, uid: String): User {
+        return try {
+            if (!document.exists()) {
+                return User(uid = uid, email = firebaseAuth.currentUser?.email ?: "", fullName = "Thanh vien moi")
             }
-            
-            val interestsList = mutableListOf<Category>()
-            try {
-                snapshot.child("interests").children.forEach { child ->
-                    child.getValue(String::class.java)?.let { categoryName ->
-                        try {
-                            interestsList.add(Category.valueOf(categoryName))
-                        } catch (e: Exception) {}
-                    }
+
+            val data = document.data.orEmpty()
+            val interests = (data["interests"] as? List<*>)?.mapNotNull { value ->
+                try {
+                    Category.valueOf(value.toString())
+                } catch (e: Exception) {
+                    null
                 }
-            } catch (e: Exception) {}
+            }.orEmpty()
 
-            fun safeInt(snap: DataSnapshot): Int {
-                return try {
-                    when (val v = snap.value) {
-                        is Number -> v.toInt()
-                        is String -> v.toIntOrNull() ?: 0
-                        else -> 0
-                    }
-                } catch (e: Exception) { 0 }
+            fun safeInt(field: String): Int {
+                return when (val value = data[field]) {
+                    is Number -> value.toInt()
+                    is String -> value.toIntOrNull() ?: 0
+                    else -> 0
+                }
             }
 
-            fun safeDouble(snap: DataSnapshot): Double {
-                return try {
-                    when (val v = snap.value) {
-                        is Number -> v.toDouble()
-                        is String -> v.toDoubleOrNull() ?: 0.0
-                        else -> 0.0
-                    }
-                } catch (e: Exception) { 0.0 }
+            fun safeDouble(field: String): Double {
+                return when (val value = data[field]) {
+                    is Number -> value.toDouble()
+                    is String -> value.toDoubleOrNull() ?: 0.0
+                    else -> 0.0
+                }
             }
 
-            return User(
+            User(
                 uid = uid,
-                email = snapshot.child("email").getValue(String::class.java) ?: "",
-                fullName = snapshot.child("fullName").getValue(String::class.java) ?: "Traveler",
-                photoUrl = snapshot.child("photoUrl").getValue(String::class.java) ?: snapshot.child("photoURL").getValue(String::class.java),
-                bio = snapshot.child("bio").getValue(String::class.java),
-                location = snapshot.child("location").getValue(String::class.java),
-                displayName = snapshot.child("displayName").getValue(String::class.java),
-                isBlocked = snapshot.child("isBlocked").getValue(Boolean::class.java) ?: false,
-                blockedReason = snapshot.child("blockedReason").getValue(String::class.java),
-                totalTrips = safeInt(snapshot.child("totalTrips")),
-                totalSpent = safeDouble(snapshot.child("totalSpent")),
-                upcomingTrips = safeInt(snapshot.child("upcomingTrips")),
-                interests = interestsList,
-                wishlistIds = try { snapshot.child("wishlistIds").children.mapNotNull { it.getValue(String::class.java) } } catch (e: Exception) { emptyList() }
+                email = data["email"] as? String ?: "",
+                fullName = data["fullName"] as? String ?: "Traveler",
+                photoUrl = data["photoUrl"] as? String ?: data["photoURL"] as? String,
+                bio = data["bio"] as? String,
+                location = data["location"] as? String,
+                displayName = data["displayName"] as? String,
+                isBlocked = data["isBlocked"] as? Boolean ?: false,
+                blockedReason = data["blockedReason"] as? String,
+                totalTrips = safeInt("totalTrips"),
+                totalSpent = safeDouble("totalSpent"),
+                upcomingTrips = safeInt("upcomingTrips"),
+                interests = interests,
+                wishlistIds = (data["wishlistIds"] as? List<*>)?.mapNotNull { it as? String }.orEmpty()
             )
         } catch (e: Exception) {
-            return User(uid = uid, email = "", fullName = "User")
+            User(uid = uid, email = "", fullName = "User")
         }
     }
 
@@ -181,16 +182,16 @@ class AuthRepositoryImpl @Inject constructor(
         val trimmedEmail = email.trim()
         val trimmedPassword = password.trim()
         val trimmedName = name.trim()
-        
+
         if (trimmedEmail.isEmpty() || trimmedPassword.isEmpty() || trimmedName.isEmpty()) {
-            return@withContext NetworkResult.Error("Vui lòng điền đầy đủ thông tin")
+            return@withContext NetworkResult.Error("Vui long dien day du thong tin")
         }
-        
+
         try {
             val emailKey = getEmailKey(trimmedEmail)
             val otp = (100000..999999).random().toString()
             val expiry = System.currentTimeMillis() + 10 * 60 * 1000
-            
+
             val pendingData = mapOf(
                 "email" to trimmedEmail,
                 "password" to trimmedPassword,
@@ -198,16 +199,16 @@ class AuthRepositoryImpl @Inject constructor(
                 "otp" to otp,
                 "expiry" to expiry
             )
-            pendingRegRef.child(emailKey).setValue(pendingData).await()
-            
+            pendingRegRef.document(emailKey).set(pendingData).await()
+
             val success = EmailUtils.sendOtpEmail(trimmedEmail, otp)
             if (success) {
                 NetworkResult.Success(User(uid = "pending", email = trimmedEmail, fullName = trimmedName))
             } else {
-                NetworkResult.Error("Không thể gửi email OTP. Vui lòng thử lại.")
+                NetworkResult.Error("Khong the gui email OTP. Vui long thu lai.")
             }
         } catch (e: Exception) {
-            NetworkResult.Error("Đăng ký thất bại: ${e.message}")
+            NetworkResult.Error("Dang ky that bai: ${e.message}")
         }
     }
 
@@ -215,32 +216,32 @@ class AuthRepositoryImpl @Inject constructor(
         val trimmedEmail = email.trim()
         try {
             val emailKey = getEmailKey(trimmedEmail)
-            val snapshot = pendingRegRef.child(emailKey).get().await()
-            
-            if (!snapshot.exists()) return@withContext NetworkResult.Error("Thông tin đăng ký không tồn tại")
-            
-            val storedOtp = snapshot.child("otp").getValue(String::class.java)
-            val expiry = snapshot.child("expiry").getValue(Long::class.java) ?: 0L
-            val password = snapshot.child("password").getValue(String::class.java) ?: ""
-            val name = snapshot.child("fullName").getValue(String::class.java) ?: ""
-            
+            val snapshot = pendingRegRef.document(emailKey).get().await()
+
+            if (!snapshot.exists()) return@withContext NetworkResult.Error("Thong tin dang ky khong ton tai")
+
+            val storedOtp = snapshot.getString("otp")
+            val expiry = snapshot.getLong("expiry") ?: 0L
+            val password = snapshot.getString("password") ?: ""
+            val name = snapshot.getString("fullName") ?: ""
+
             if (storedOtp == otp && System.currentTimeMillis() < expiry) {
                 val authResult = firebaseAuth.createUserWithEmailAndPassword(trimmedEmail, password).await()
-                val uid = authResult.user?.uid ?: return@withContext NetworkResult.Error("Lỗi tạo user")
-                
+                val uid = authResult.user?.uid ?: return@withContext NetworkResult.Error("Loi tao user")
+
                 val newUser = User(uid = uid, email = trimmedEmail, fullName = name, password = password)
-                usersRef.child(uid).setValue(newUser).await()
-                pendingRegRef.child(emailKey).removeValue()
+                usersRef.document(uid).set(newUser).await()
+                pendingRegRef.document(emailKey).delete().await()
                 preferenceDataStore.saveUser(newUser)
-                
+
                 NetworkResult.Success(Unit)
             } else if (System.currentTimeMillis() >= expiry) {
-                NetworkResult.Error("Mã OTP đã hết hạn")
+                NetworkResult.Error("Ma OTP da het han")
             } else {
-                NetworkResult.Error("Mã OTP không chính xác")
+                NetworkResult.Error("Ma OTP khong chinh xac")
             }
         } catch (e: Exception) {
-            NetworkResult.Error("Xác thực thất bại: ${e.message}")
+            NetworkResult.Error("Xac thuc that bai: ${e.message}")
         }
     }
 
@@ -250,16 +251,14 @@ class AuthRepositoryImpl @Inject constructor(
             val emailKey = getEmailKey(trimmedEmail)
             val otp = (100000..999999).random().toString()
             val expiry = System.currentTimeMillis() + 10 * 60 * 1000
-            
-            database.getReference("otps").child(emailKey).setValue(
-                mapOf("code" to otp, "expiry" to expiry)
-            ).await()
-            
+
+            otpsRef.document(emailKey).set(mapOf("code" to otp, "expiry" to expiry)).await()
+
             val success = EmailUtils.sendOtpEmail(trimmedEmail, otp)
             if (success) NetworkResult.Success(Unit)
-            else NetworkResult.Error("Lỗi gửi email")
+            else NetworkResult.Error("Loi gui email")
         } catch (e: Exception) {
-            NetworkResult.Error(e.message ?: "Lỗi")
+            NetworkResult.Error(e.message ?: "Loi")
         }
     }
 
@@ -267,14 +266,14 @@ class AuthRepositoryImpl @Inject constructor(
         val trimmedEmail = email.trim()
         try {
             val emailKey = getEmailKey(trimmedEmail)
-            val snapshot = database.getReference("otps").child(emailKey).get().await()
-            val storedOtp = snapshot.child("code").getValue(String::class.java)
-            val expiry = snapshot.child("expiry").getValue(Long::class.java) ?: 0L
-            
+            val snapshot = otpsRef.document(emailKey).get().await()
+            val storedOtp = snapshot.getString("code")
+            val expiry = snapshot.getLong("expiry") ?: 0L
+
             if (storedOtp == otp && System.currentTimeMillis() < expiry) NetworkResult.Success(Unit)
-            else NetworkResult.Error("Mã OTP không hợp lệ hoặc hết hạn")
+            else NetworkResult.Error("Ma OTP khong hop le hoac het han")
         } catch (e: Exception) {
-            NetworkResult.Error(e.message ?: "Lỗi")
+            NetworkResult.Error(e.message ?: "Loi")
         }
     }
 
@@ -283,20 +282,19 @@ class AuthRepositoryImpl @Inject constructor(
         val emailKey = getEmailKey(trimmedEmail)
         val otp = (100000..999999).random().toString()
         val expiry = System.currentTimeMillis() + 10 * 60 * 1000
-        
+
         try {
-            val pendingSnap = pendingRegRef.child(emailKey).get().await()
+            val pendingRef = pendingRegRef.document(emailKey)
+            val pendingSnap = pendingRef.get().await()
             if (pendingSnap.exists()) {
-                pendingRegRef.child(emailKey).child("otp").setValue(otp).await()
-                pendingRegRef.child(emailKey).child("expiry").setValue(expiry).await()
+                pendingRef.update(mapOf("otp" to otp, "expiry" to expiry)).await()
             } else {
-                database.getReference("otps").child(emailKey).child("code").setValue(otp).await()
-                database.getReference("otps").child(emailKey).child("expiry").setValue(expiry).await()
+                otpsRef.document(emailKey).set(mapOf("code" to otp, "expiry" to expiry), SetOptions.merge()).await()
             }
             EmailUtils.sendOtpEmail(trimmedEmail, otp)
             NetworkResult.Success(Unit)
         } catch (e: Exception) {
-            NetworkResult.Error(e.message ?: "Lỗi")
+            NetworkResult.Error(e.message ?: "Loi")
         }
     }
 
@@ -306,57 +304,53 @@ class AuthRepositoryImpl @Inject constructor(
         val trimmedEmail = email.trim()
         try {
             val emailKey = getEmailKey(trimmedEmail)
-            val snapshot = database.getReference("otps").child(emailKey).get().await()
-            val storedOtp = snapshot.child("code").getValue(String::class.java)
-            val expiry = snapshot.child("expiry").getValue(Long::class.java) ?: 0L
-            
+            val snapshot = otpsRef.document(emailKey).get().await()
+            val storedOtp = snapshot.getString("code")
+            val expiry = snapshot.getLong("expiry") ?: 0L
+
             if (storedOtp == otp && System.currentTimeMillis() < expiry) {
-                // 1. Cập nhật mật khẩu vào Database (Theo yêu cầu của bạn)
-                val userSnapshot = usersRef.orderByChild("email").equalTo(trimmedEmail).get().await()
-                val uid = userSnapshot.children.firstOrNull()?.key
-                if (uid != null) {
-                    usersRef.child(uid).child("password").setValue(newPassword).await()
+                val userSnapshot = usersRef.whereEqualTo("email", trimmedEmail).limit(1).get().await()
+                val userDoc = userSnapshot.documents.firstOrNull()
+                if (userDoc != null) {
+                    userDoc.reference.update("password", newPassword).await()
                 }
 
-                // 2. Gửi email đặt lại mật khẩu của Firebase (Bắt buộc để Firebase Auth cập nhật mật khẩu đăng nhập)
-                // Lưu ý: Người dùng VẪN PHẢI nhấn vào link trong email này để có thể đăng nhập bằng mật khẩu mới.
                 firebaseAuth.sendPasswordResetEmail(trimmedEmail).await()
-
-                database.getReference("otps").child(emailKey).removeValue()
+                otpsRef.document(emailKey).delete().await()
                 NetworkResult.Success(Unit)
             } else {
-                NetworkResult.Error("Mã xác thực không hợp lệ hoặc đã hết hạn")
+                NetworkResult.Error("Ma xac thuc khong hop le hoac da het han")
             }
         } catch (e: Exception) {
-            NetworkResult.Error("Lỗi: ${e.message}")
+            NetworkResult.Error("Loi: ${e.message}")
         }
     }
 
     override suspend fun getCurrentUser(): User? {
         return try {
             withTimeoutOrNull(2000) { preferenceDataStore.currentUser.first() }
-        } catch (e: Exception) { null }
+        } catch (e: Exception) {
+            null
+        }
     }
 
     override fun observeUser(): Flow<User?> = preferenceDataStore.currentUser
 
     override fun listenToUserRealtime(uid: String): Flow<User?> = callbackFlow {
-        val userRef = usersRef.child(uid)
-        val listener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val user = mapSnapshotToUser(snapshot, uid)
-                // Sync to local data store as well
-                repositoryScope.launch {
-                    preferenceDataStore.saveUser(user)
-                }
-                trySend(user)
+        val registration = usersRef.document(uid).addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                close(error)
+                return@addSnapshotListener
             }
-            override fun onCancelled(error: DatabaseError) {
-                close(error.toException())
+
+            val document = snapshot ?: return@addSnapshotListener
+            val user = mapDocumentToUser(document, uid)
+            repositoryScope.launch {
+                preferenceDataStore.saveUser(user)
             }
+            trySend(user)
         }
-        userRef.addValueEventListener(listener)
-        awaitClose { userRef.removeEventListener(listener) }
+        awaitClose { registration.remove() }
     }
 
     override fun logout() {
@@ -364,11 +358,18 @@ class AuthRepositoryImpl @Inject constructor(
         repositoryScope.launch { preferenceDataStore.clearUser() }
     }
 
-    override fun updateProfile(name: String, displayName: String?, location: String?, bio: String?, interests: List<Category>, photoUrl: String?): Flow<NetworkResult<User>> = flow {
+    override fun updateProfile(
+        name: String,
+        displayName: String?,
+        location: String?,
+        bio: String?,
+        interests: List<Category>,
+        photoUrl: String?
+    ): Flow<NetworkResult<User>> = flow {
         val uid = firebaseAuth.currentUser?.uid ?: return@flow
         emit(NetworkResult.Loading)
         try {
-            val updates = mutableMapOf<String, Any>(
+            val updates = mutableMapOf<String, Any?>(
                 "fullName" to name.trim(),
                 "displayName" to (displayName ?: ""),
                 "location" to (location ?: ""),
@@ -376,21 +377,24 @@ class AuthRepositoryImpl @Inject constructor(
                 "interests" to interests.map { it.name }
             )
             photoUrl?.let { updates["photoUrl"] = it }
-            usersRef.child(uid).updateChildren(updates).await()
-            val user = mapSnapshotToUser(usersRef.child(uid).get().await(), uid)
+
+            usersRef.document(uid).set(updates, SetOptions.merge()).await()
+            val user = mapDocumentToUser(usersRef.document(uid).get().await(), uid)
             preferenceDataStore.saveUser(user)
+            reviewRepository.updateUserInReviews(uid, user.fullName ?: name.trim(), user.photoUrl)
+            tripRepository.updateUserInTripMembers(uid, user.fullName ?: name.trim(), user.photoUrl)
             emit(NetworkResult.Success(user))
         } catch (e: Exception) {
-            emit(NetworkResult.Error(e.message ?: "Lỗi"))
+            emit(NetworkResult.Error(e.message ?: "Loi"))
         }
     }
 
     override fun checkDatabaseStatus(): Flow<NetworkResult<Boolean>> = flow {
         try {
-            val snapshot = database.getReference(".info/connected").get().await()
-            emit(NetworkResult.Success(snapshot.getValue(Boolean::class.java) ?: false))
+            usersRef.limit(1).get().await()
+            emit(NetworkResult.Success(true))
         } catch (e: Exception) {
-            emit(NetworkResult.Error("Lỗi kết nối DB"))
+            emit(NetworkResult.Error("Loi ket noi DB"))
         }
     }
 
@@ -399,52 +403,77 @@ class AuthRepositoryImpl @Inject constructor(
         try {
             val jsonString = context.assets.open("data/seed_data.json").bufferedReader().use { it.readText() }
             val root = json.parseToJsonElement(jsonString).jsonObject
-            root["destinations"]?.jsonObject?.let { destinationsRef.updateChildren(it.toAny() as Map<String, Any>).await() }
+            val destinations = root["destinations"]?.jsonObject.orEmpty()
+            val batch = firestore.batch()
+            destinations.forEach { (key, value) ->
+                val destination = json.decodeFromJsonElement<Destination>(value)
+                batch.set(destinationsRef.document(key), destination.copy(id = destination.id.ifEmpty { key }))
+            }
+            batch.commit().await()
             emit(NetworkResult.Success(Unit))
         } catch (e: Exception) {
-            emit(NetworkResult.Error(e.message ?: "Lỗi"))
+            emit(NetworkResult.Error(e.message ?: "Loi"))
         }
     }
 
-    private fun kotlinx.serialization.json.JsonElement.toAny(): Any? {
+    private fun JsonElement.toAny(): Any? {
         return when (this) {
-            is kotlinx.serialization.json.JsonPrimitive -> {
-                if (isString) content else content.toBooleanStrictOrNull() ?: content.toLongOrNull() ?: content.toDoubleOrNull() ?: content
+            is JsonPrimitive -> {
+                if (isString) content else booleanOrNull ?: longOrNull ?: doubleOrNull ?: content
             }
-            is kotlinx.serialization.json.JsonObject -> this.mapValues { it.value.toAny() }
-            is kotlinx.serialization.json.JsonArray -> this.map { it.toAny() }
-            else -> null
+            is JsonObject -> mapValues { it.value.toAny() }
+            is JsonArray -> map { it.toAny() }
         }
     }
 
     override fun isFirstTime(): Flow<Boolean> = preferenceDataStore.isFirstTime
+
     override suspend fun setFirstTime(isFirst: Boolean) = preferenceDataStore.setFirstTime(isFirst)
+
     override fun toggleWishlist(destinationId: String): Flow<NetworkResult<Boolean>> = flow {
         val uid = firebaseAuth.currentUser?.uid ?: return@flow
         emit(NetworkResult.Loading)
         try {
-            val snapshot = usersRef.child(uid).child("wishlistIds").get().await()
-            val current = snapshot.children.mapNotNull { it.getValue(String::class.java) }.toMutableList()
-            val added = if (current.contains(destinationId)) { current.remove(destinationId); false } else { current.add(destinationId); true }
-            usersRef.child(uid).child("wishlistIds").setValue(current).await()
-            preferenceDataStore.saveUser(mapSnapshotToUser(usersRef.child(uid).get().await(), uid))
+            val userRef = usersRef.document(uid)
+            val added = firestore.runTransaction { transaction ->
+                val snapshot = transaction.get(userRef)
+                val current = (snapshot.get("wishlistIds") as? List<*>)?.mapNotNull { it as? String }?.toMutableList()
+                    ?: mutableListOf()
+                val isAdded = if (current.contains(destinationId)) {
+                    current.remove(destinationId)
+                    false
+                } else {
+                    current.add(destinationId)
+                    true
+                }
+                transaction.set(userRef, mapOf("wishlistIds" to current), SetOptions.merge())
+                isAdded
+            }.await()
+            preferenceDataStore.saveUser(mapDocumentToUser(userRef.get().await(), uid))
             emit(NetworkResult.Success(added))
-        } catch (e: Exception) { emit(NetworkResult.Error(e.message ?: "Lỗi")) }
+        } catch (e: Exception) {
+            emit(NetworkResult.Error(e.message ?: "Loi"))
+        }
     }
 
     override fun uploadImage(path: String, byteArray: ByteArray): Flow<NetworkResult<String>> = flow {
         emit(NetworkResult.Loading)
-        try { emit(NetworkResult.Success(supabaseService.uploadImage(path, byteArray))) }
-        catch (e: Exception) { emit(NetworkResult.Error(e.message ?: "Upload failed")) }
+        try {
+            emit(NetworkResult.Success(supabaseService.uploadImage(path, byteArray)))
+        } catch (e: Exception) {
+            emit(NetworkResult.Error(e.message ?: "Upload failed"))
+        }
     }
 
     override suspend fun changePassword(oldPassword: String, newPassword: String): NetworkResult<Unit> = withContext(Dispatchers.IO) {
         try {
-            val user = firebaseAuth.currentUser ?: return@withContext NetworkResult.Error("Chưa đăng nhập")
-            val credential = com.google.firebase.auth.EmailAuthProvider.getCredential(user.email!!, oldPassword)
+            val user = firebaseAuth.currentUser ?: return@withContext NetworkResult.Error("Chua dang nhap")
+            val credential = EmailAuthProvider.getCredential(user.email!!, oldPassword)
             user.reauthenticate(credential).await()
             user.updatePassword(newPassword).await()
             NetworkResult.Success(Unit)
-        } catch (e: Exception) { NetworkResult.Error(e.message ?: "Lỗi") }
+        } catch (e: Exception) {
+            NetworkResult.Error(e.message ?: "Loi")
+        }
     }
 }

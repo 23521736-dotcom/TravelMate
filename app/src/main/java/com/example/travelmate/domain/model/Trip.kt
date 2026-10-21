@@ -1,6 +1,6 @@
 package com.example.travelmate.domain.model
 
-import com.google.firebase.database.PropertyName
+import com.google.firebase.firestore.PropertyName
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -68,6 +68,6 @@ data class TripActivity(
     @SerialName("isDone") @get:PropertyName("isDone") @set:PropertyName("isDone") var done: Boolean = false,
     @get:PropertyName("linkedExpenseId") @set:PropertyName("linkedExpenseId") var linkedExpenseId: String? = null
 ) {
-    @get:com.google.firebase.database.Exclude
+    @get:com.google.firebase.firestore.Exclude
     val isDone: Boolean get() = done
 }

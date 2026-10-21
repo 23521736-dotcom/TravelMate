@@ -1,6 +1,6 @@
 package com.example.travelmate.domain.model
 
-import com.google.firebase.database.PropertyName
+import com.google.firebase.firestore.PropertyName
 import kotlinx.serialization.Serializable
 
 @Serializable

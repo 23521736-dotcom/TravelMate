@@ -5,65 +5,65 @@ import com.example.travelmate.domain.model.Expense
 import com.example.travelmate.domain.model.ItineraryDay
 import com.example.travelmate.domain.model.Trip
 import com.example.travelmate.domain.model.TripActivity
+import com.example.travelmate.domain.model.TripLog
 import com.example.travelmate.domain.model.TripMember
 import com.example.travelmate.domain.repository.TripRepository
 import com.example.travelmate.util.NetworkResult
-import com.google.firebase.database.DataSnapshot
-import com.google.firebase.database.DatabaseError
-import com.google.firebase.database.FirebaseDatabase
-import com.google.firebase.database.ValueEventListener
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 import javax.inject.Inject
 
 class TripRepositoryImpl @Inject constructor(
-    private val database: FirebaseDatabase,
+    private val firestore: FirebaseFirestore,
     private val supabaseService: SupabaseService
 ) : TripRepository {
 
-    private val tripsRef = database.getReference("trips")
-    private val expensesRef = database.getReference("expenses")
-    private val tripMembersRef = database.getReference("tripMembers")
-    private val userTripsRef = database.getReference("userTrips")
-    private val inviteCodesRef = database.getReference("inviteCodes")
-    private val shareTokensRef = database.getReference("shareTokens")
-    private val usersRef = database.getReference("users")
-    private val tripLogsRef = database.getReference("tripLogs")
+    private val tripsRef = firestore.collection("trips")
+    private val expensesRef = firestore.collection("expenses")
+    private val tripMembersRef = firestore.collection("tripMembers")
+    private val userTripsRef = firestore.collection("userTrips")
+    private val inviteCodesRef = firestore.collection("inviteCodes")
+    private val shareTokensRef = firestore.collection("shareTokens")
+    private val usersRef = firestore.collection("users")
+    private val tripLogsRef = firestore.collection("tripLogs")
+
+    private fun tripMembers(tripId: String) =
+        tripMembersRef.document(tripId).collection("members")
+
+    private fun userTrips(userId: String) =
+        userTripsRef.document(userId).collection("trips")
+
+    private fun tripLogs(tripId: String) =
+        tripLogsRef.document(tripId).collection("logs")
 
     override fun createTrip(trip: Trip): Flow<NetworkResult<String>> = callbackFlow {
         android.util.Log.d("TripRepo", "Creating trip for destination: ${trip.destination}")
         trySend(NetworkResult.Loading)
-        
-        val tripId = trip.id.ifEmpty { tripsRef.push().key ?: UUID.randomUUID().toString() }
-        
-        // Generate sharing codes
+
+        val tripId = trip.id.ifEmpty { tripsRef.document().id }
         val shareToken = "t_" + UUID.randomUUID().toString().replace("-", "").take(12)
         val inviteCode = UUID.randomUUID().toString().replace("-", "").take(6).uppercase()
-        
-        val finalTrip = trip.copy(
-            id = tripId,
-            shareToken = shareToken,
-            inviteCode = inviteCode
-        )
-        
+        val finalTrip = trip.copy(id = tripId, shareToken = shareToken, inviteCode = inviteCode)
+
         launch {
             try {
-                // 1. Fetch user info for cached member data
-                val userSnapshot = usersRef.child(trip.userId).get().await()
-                val userData = userSnapshot.value as? Map<*, *>
-                val userName = userData?.get("fullName") as? String 
-                    ?: userData?.get("displayName") as? String
+                val userSnapshot = usersRef.document(trip.userId).get().await()
+                val userName = userSnapshot.getString("fullName")
+                    ?: userSnapshot.getString("displayName")
                     ?: "Traveler"
-                val userPhotoUrl = userData?.get("photoUrl") as? String
-                
+                val userPhotoUrl = userSnapshot.getString("photoUrl")
+
                 val member = TripMember(
                     userId = trip.userId,
                     tripId = tripId,
@@ -72,23 +72,20 @@ class TripRepositoryImpl @Inject constructor(
                     userName = userName,
                     userPhotoUrl = userPhotoUrl
                 )
-                
-                // 2. Perform atomic-like update using a map
-                val updates = hashMapOf<String, Any>(
-                    "trips/$tripId" to finalTrip,
-                    "tripMembers/$tripId/${trip.userId}" to member,
-                    "userTrips/${trip.userId}/$tripId" to true,
-                    "inviteCodes/$inviteCode" to tripId,
-                    "shareTokens/$shareToken" to tripId
-                )
-                
-                database.reference.updateChildren(updates).await()
-                
+
+                val batch = firestore.batch()
+                batch.set(tripsRef.document(tripId), finalTrip)
+                batch.set(tripMembers(tripId).document(trip.userId), member)
+                batch.set(userTrips(trip.userId).document(tripId), mapOf("tripId" to tripId, "joinedAt" to System.currentTimeMillis()))
+                batch.set(inviteCodesRef.document(inviteCode), mapOf("tripId" to tripId))
+                batch.set(shareTokensRef.document(shareToken), mapOf("tripId" to tripId))
+                batch.commit().await()
+
                 android.util.Log.d("TripRepo", "Trip created successfully with ID: $tripId")
                 trySend(NetworkResult.Success(tripId))
             } catch (e: Exception) {
                 android.util.Log.e("TripRepo", "Failed to create trip", e)
-                trySend(NetworkResult.Error("Lỗi tạo chuyến đi: ${e.message}"))
+                trySend(NetworkResult.Error("Loi tao chuyen di: ${e.message}"))
             } finally {
                 close()
             }
@@ -99,195 +96,134 @@ class TripRepositoryImpl @Inject constructor(
     override fun getUserTrips(userId: String): Flow<NetworkResult<List<Trip>>> = callbackFlow {
         android.util.Log.d("TripRepo", "Initiating getUserTrips listener for $userId")
         trySend(NetworkResult.Loading)
-        
-        var isMigrationChecked = false
 
-        val listener = userTripsRef.child(userId).addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val tripIds = snapshot.children.mapNotNull { it.key }
-                android.util.Log.d("TripRepo", "onDataChange: User $userId has ${tripIds.size} trip IDs")
-                
-                launch {
-                    try {
-                        if (tripIds.isEmpty() && !isMigrationChecked) {
-                            isMigrationChecked = true
-                            android.util.Log.d("TripRepo", "Checking legacy trips for user $userId")
-                            
-                            // Resilient migration check: Fallback to full fetch if indexing fails
-                            val legacySnap = try {
-                                tripsRef.orderByChild("userId").equalTo(userId).get().await()
-                            } catch (e: Exception) {
-                                android.util.Log.w("TripRepo", "Indexed query failed, falling back to manual filter", e)
-                                tripsRef.get().await() // Fetch all and filter manually as fallback
+        var migrationChecked = false
+        val registration = userTrips(userId).addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                android.util.Log.e("TripRepo", "Firestore listener cancelled: ${error.message}")
+                trySend(NetworkResult.Error("Ket noi Firebase bi gian doan"))
+                return@addSnapshotListener
+            }
+
+            val tripIds = snapshot?.documents?.map { it.id }.orEmpty()
+            launch {
+                try {
+                    if (tripIds.isEmpty() && !migrationChecked) {
+                        migrationChecked = true
+                        val legacyTrips = tripsRef.whereEqualTo("userId", userId).get().await().documents
+                        if (legacyTrips.isNotEmpty()) {
+                            val userSnapshot = usersRef.document(userId).get().await()
+                            val userName = userSnapshot.getString("fullName")
+                                ?: userSnapshot.getString("displayName")
+                                ?: "Traveler"
+                            val userPhotoUrl = userSnapshot.getString("photoUrl")
+                            val batch = firestore.batch()
+                            legacyTrips.forEach { doc ->
+                                val tripId = doc.id
+                                val member = TripMember(
+                                    userId = userId,
+                                    tripId = tripId,
+                                    role = TripMember.ROLE_OWNER,
+                                    status = TripMember.STATUS_JOINED,
+                                    userName = userName,
+                                    userPhotoUrl = userPhotoUrl
+                                )
+                                batch.set(userTrips(userId).document(tripId), mapOf("tripId" to tripId), SetOptions.merge())
+                                batch.set(tripMembers(tripId).document(userId), member, SetOptions.merge())
                             }
-
-                            if (legacySnap.exists()) {
-                                // If we fetched everything, filter manually; otherwise use the indexed result
-                                val tripsToMigrate = if (legacySnap.key == "trips") {
-                                    legacySnap.children.filter { it.child("userId").value == userId }
-                                } else {
-                                    legacySnap.children.toList()
-                                }
-
-                                if (tripsToMigrate.isNotEmpty()) {
-                                    android.util.Log.i("TripRepo", "Found ${tripsToMigrate.size} trips to migrate")
-                                    performOneTimeMigrationResilient(userId, tripsToMigrate)
-                                    return@launch
-                                }
-                            }
+                            batch.commit().await()
+                            return@launch
                         }
-
-                        val tripsList = mutableListOf<Trip>()
-                        if (tripIds.isNotEmpty()) {
-                            coroutineScope {
-                                val deferred = tripIds.map { id ->
-                                    async {
-                                        try {
-                                            val tripSnap = tripsRef.child(id).get().await()
-                                            val trip = tripSnap.getValue(Trip::class.java)
-                                            trip?.copy(status = trip.getCalculatedStatus())
-                                        } catch (e: Exception) {
-                                            android.util.Log.e("TripRepo", "Individual fetch error for $id", e)
-                                            null
-                                        }
-                                    }
-                                }
-                                tripsList.addAll(deferred.awaitAll().filterNotNull())
-                            }
-                        }
-
-                        android.util.Log.d("TripRepo", "Final Success: Sending ${tripsList.size} trips to UI")
-                        trySend(NetworkResult.Success(tripsList.distinctBy { it.id }.sortedByDescending { it.createdAt }))
-                    } catch (e: Exception) {
-                        android.util.Log.e("TripRepo", "Sync Flow Crashed", e)
-                        trySend(NetworkResult.Error("Lỗi đồng bộ: ${e.message}"))
                     }
+
+                    val trips = coroutineScope {
+                        tripIds.map { id ->
+                            async {
+                                try {
+                                    tripsRef.document(id).get().await().toObject(Trip::class.java)
+                                        ?.copy(id = id)
+                                        ?.let { it.copy(status = it.getCalculatedStatus()) }
+                                } catch (e: Exception) {
+                                    android.util.Log.e("TripRepo", "Individual fetch error for $id", e)
+                                    null
+                                }
+                            }
+                        }.awaitAll().filterNotNull()
+                    }
+                    trySend(NetworkResult.Success(trips.distinctBy { it.id }.sortedByDescending { it.createdAt }))
+                } catch (e: Exception) {
+                    android.util.Log.e("TripRepo", "Sync flow crashed", e)
+                    trySend(NetworkResult.Error("Loi dong bo: ${e.message}"))
                 }
             }
-
-            override fun onCancelled(error: DatabaseError) {
-                android.util.Log.e("TripRepo", "Firebase Listener Cancelled: ${error.message}")
-                trySend(NetworkResult.Error("Kết nối Firebase bị gián đoạn"))
-            }
-        })
-        
-        awaitClose { 
-            android.util.Log.d("TripRepo", "Removing getUserTrips listener for $userId")
-            userTripsRef.child(userId).removeEventListener(listener) 
         }
-    }
 
-    private suspend fun performOneTimeMigrationResilient(userId: String, tripsToMigrate: List<DataSnapshot>) {
-        try {
-            android.util.Log.d("TripRepo", "Migrating legacy trips for user: $userId")
-            val userSnapshot = usersRef.child(userId).get().await()
-            val userData = userSnapshot.value as? Map<*, *>
-            val userName = userData?.get("fullName") as? String 
-                ?: userData?.get("displayName") as? String 
-                ?: "Traveler"
-            val userPhotoUrl = userData?.get("photoUrl") as? String
-            
-            val updates = hashMapOf<String, Any>()
-            
-            for (child in tripsToMigrate) {
-                val trip = child.getValue(Trip::class.java)
-                if (trip != null) {
-                    val member = TripMember(
-                        userId = userId,
-                        tripId = trip.id,
-                        role = TripMember.ROLE_OWNER,
-                        status = TripMember.STATUS_JOINED,
-                        userName = userName,
-                        userPhotoUrl = userPhotoUrl
-                    )
-                    updates["userTrips/$userId/${trip.id}"] = true
-                    updates["tripMembers/${trip.id}/$userId"] = member
-                }
-            }
-            
-            if (updates.isNotEmpty()) {
-                android.util.Log.i("TripRepo", "Migrating ${updates.size / 2} trips to new structure")
-                database.reference.updateChildren(updates).await()
-            }
-        } catch (e: Exception) {
-            android.util.Log.e("TripRepo", "Migration failed", e)
-        }
+        awaitClose { registration.remove() }
     }
 
     override fun getTripById(tripId: String): Flow<NetworkResult<Trip>> = callbackFlow {
         trySend(NetworkResult.Loading)
-        
-        val listener = tripsRef.child(tripId).addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                try {
-                    val trip = snapshot.getValue(Trip::class.java)
-                    if (trip != null) {
-                        trySend(NetworkResult.Success(trip.copy(status = trip.getCalculatedStatus())))
-                    } else {
-                        trySend(NetworkResult.Error("Không tìm thấy chuyến đi"))
-                    }
-                } catch (e: Exception) {
-                    android.util.Log.e("TripRepo", "Error mapping trip $tripId", e)
-                    trySend(NetworkResult.Error("Lỗi dữ liệu chuyến đi: ${e.message}"))
-                }
+        val registration = tripsRef.document(tripId).addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                trySend(NetworkResult.Error("Loi ket noi: ${error.message}"))
+                return@addSnapshotListener
             }
 
-            override fun onCancelled(error: DatabaseError) {
-                trySend(NetworkResult.Error("Lỗi kết nối: ${error.message}"))
+            try {
+                val trip = snapshot?.toObject(Trip::class.java)?.copy(id = snapshot.id)
+                if (trip != null) {
+                    trySend(NetworkResult.Success(trip.copy(status = trip.getCalculatedStatus())))
+                } else {
+                    trySend(NetworkResult.Error("Khong tim thay chuyen di"))
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("TripRepo", "Error mapping trip $tripId", e)
+                trySend(NetworkResult.Error("Loi du lieu chuyen di: ${e.message}"))
             }
-        })
-        awaitClose { tripsRef.child(tripId).removeEventListener(listener) }
+        }
+        awaitClose { registration.remove() }
     }
 
     override fun updateTrip(trip: Trip): Flow<NetworkResult<Unit>> = callbackFlow {
         trySend(NetworkResult.Loading)
-        tripsRef.child(trip.id).setValue(trip).addOnSuccessListener {
-            trySend(NetworkResult.Success(Unit))
-            close()
-        }.addOnFailureListener { e ->
-            trySend(NetworkResult.Error("Cập nhật thất bại: ${e.message}"))
-            close()
-        }
+        tripsRef.document(trip.id).set(trip)
+            .addOnSuccessListener {
+                trySend(NetworkResult.Success(Unit))
+                close()
+            }
+            .addOnFailureListener { e ->
+                trySend(NetworkResult.Error("Cap nhat that bai: ${e.message}"))
+                close()
+            }
         awaitClose()
     }
 
     override fun deleteTrip(tripId: String): Flow<NetworkResult<Unit>> = callbackFlow {
         trySend(NetworkResult.Loading)
-        
         launch {
             try {
-                // Get trip to find codes and members
-                val tripSnap = tripsRef.child(tripId).get().await()
-                val trip = tripSnap.getValue(Trip::class.java)
-                
-                val updates = hashMapOf<String, Any?>()
-                
+                val trip = tripsRef.document(tripId).get().await().toObject(Trip::class.java)
+                val members = tripMembers(tripId).get().await().documents
+                val expenses = expensesRef.whereEqualTo("tripId", tripId).get().await().documents
+                val logs = tripLogs(tripId).get().await().documents
+
+                val batch = firestore.batch()
                 if (trip != null) {
-                    // 1. Remove from inviteCodes and shareTokens
-                    if (trip.inviteCode.isNotEmpty()) updates["inviteCodes/${trip.inviteCode}"] = null
-                    if (trip.shareToken.isNotEmpty()) updates["shareTokens/${trip.shareToken}"] = null
-                    
-                    // 2. Remove from userTrips for all members
-                    val membersSnap = tripMembersRef.child(tripId).get().await()
-                    membersSnap.children.forEach { memberSnap ->
-                        val memberUserId = memberSnap.key
-                        if (memberUserId != null) {
-                            updates["userTrips/$memberUserId/$tripId"] = null
-                        }
-                    }
-                    
-                    // 3. Remove members list
-                    updates["tripMembers/$tripId"] = null
+                    if (trip.inviteCode.isNotEmpty()) batch.delete(inviteCodesRef.document(trip.inviteCode))
+                    if (trip.shareToken.isNotEmpty()) batch.delete(shareTokensRef.document(trip.shareToken))
                 }
-                
-                // 4. Finally delete the trip itself
-                updates["trips/$tripId"] = null
-                
-                database.reference.updateChildren(updates).await()
-                
+                members.forEach { member ->
+                    batch.delete(userTrips(member.id).document(tripId))
+                    batch.delete(member.reference)
+                }
+                expenses.forEach { batch.delete(it.reference) }
+                logs.forEach { batch.delete(it.reference) }
+                batch.delete(tripsRef.document(tripId))
+                batch.commit().await()
+
                 trySend(NetworkResult.Success(Unit))
             } catch (e: Exception) {
-                trySend(NetworkResult.Error("Xóa thất bại: ${e.message}"))
+                trySend(NetworkResult.Error("Xoa that bai: ${e.message}"))
             } finally {
                 close()
             }
@@ -297,35 +233,26 @@ class TripRepositoryImpl @Inject constructor(
 
     override fun addActivity(tripId: String, dayIndex: Int, activity: TripActivity): Flow<NetworkResult<Unit>> = callbackFlow {
         trySend(NetworkResult.Loading)
-        
         launch {
             try {
-                val snapshot = tripsRef.child(tripId).get().await()
-                val trip = snapshot.getValue(Trip::class.java)
+                val tripRef = tripsRef.document(tripId)
+                val trip = tripRef.get().await().toObject(Trip::class.java)
                 if (trip != null) {
                     val updatedItinerary = trip.itinerary.toMutableList()
-                    
                     while (updatedItinerary.size <= dayIndex) {
                         updatedItinerary.add(ItineraryDay(dayNumber = updatedItinerary.size + 1))
                     }
-
                     val day = updatedItinerary[dayIndex]
-                    val updatedActivities = day.activities.toMutableList()
-                    val activityId = tripsRef.push().key ?: UUID.randomUUID().toString()
-                    updatedActivities.add(activity.copy(id = activityId))
-                    
-                    // Auto-sort activities by time
-                    val sortedActivities = updatedActivities.sortedBy { parseTimeHelper(it.time) }
-                    
+                    val activityId = activity.id.ifEmpty { tripsRef.document().id }
+                    val sortedActivities = (day.activities + activity.copy(id = activityId)).sortedBy { parseTimeHelper(it.time) }
                     updatedItinerary[dayIndex] = day.copy(activities = sortedActivities)
-                    
-                    tripsRef.child(tripId).child("itinerary").setValue(updatedItinerary).await()
+                    tripRef.update("itinerary", updatedItinerary).await()
                     trySend(NetworkResult.Success(Unit))
                 } else {
-                    trySend(NetworkResult.Error("Không tìm thấy chuyến đi"))
+                    trySend(NetworkResult.Error("Khong tim thay chuyen di"))
                 }
             } catch (e: Exception) {
-                trySend(NetworkResult.Error("Lỗi thêm hoạt động: ${e.message}"))
+                trySend(NetworkResult.Error("Loi them hoat dong: ${e.message}"))
             } finally {
                 close()
             }
@@ -337,26 +264,22 @@ class TripRepositoryImpl @Inject constructor(
         trySend(NetworkResult.Loading)
         launch {
             try {
-                val snapshot = tripsRef.child(tripId).get().await()
-                val trip = snapshot.getValue(Trip::class.java)
+                val tripRef = tripsRef.document(tripId)
+                val trip = tripRef.get().await().toObject(Trip::class.java)
                 if (trip != null && dayIndex < trip.itinerary.size) {
                     val updatedItinerary = trip.itinerary.toMutableList()
                     val day = updatedItinerary[dayIndex]
-                    val updatedActivities = day.activities.map { 
-                        if (it.id == activity.id) activity else it
-                    }
-                    
-                    // Auto-sort activities by time
-                    val sortedActivities = updatedActivities.sortedBy { parseTimeHelper(it.time) }
-                    
+                    val sortedActivities = day.activities
+                        .map { if (it.id == activity.id) activity else it }
+                        .sortedBy { parseTimeHelper(it.time) }
                     updatedItinerary[dayIndex] = day.copy(activities = sortedActivities)
-                    tripsRef.child(tripId).child("itinerary").setValue(updatedItinerary).await()
+                    tripRef.update("itinerary", updatedItinerary).await()
                     trySend(NetworkResult.Success(Unit))
                 } else {
-                    trySend(NetworkResult.Error("Không tìm thấy dữ liệu"))
+                    trySend(NetworkResult.Error("Khong tim thay du lieu"))
                 }
             } catch (e: Exception) {
-                trySend(NetworkResult.Error("Lỗi cập nhật: ${e.message}"))
+                trySend(NetworkResult.Error("Loi cap nhat: ${e.message}"))
             } finally {
                 close()
             }
@@ -371,10 +294,8 @@ class TripRepositoryImpl @Inject constructor(
             var hour = timeParts[0].toInt()
             val minute = if (timeParts.size > 1) timeParts[1].toInt() else 0
             val isPm = parts.size > 1 && (parts[1] == "CH" || parts[1] == "PM")
-            
             if (isPm && hour < 12) hour += 12
             if (!isPm && hour == 12) hour = 0
-            
             hour * 60 + minute
         } catch (e: Exception) {
             0
@@ -385,20 +306,21 @@ class TripRepositoryImpl @Inject constructor(
         trySend(NetworkResult.Loading)
         launch {
             try {
-                val snapshot = tripsRef.child(tripId).get().await()
-                val trip = snapshot.getValue(Trip::class.java)
+                val tripRef = tripsRef.document(tripId)
+                val trip = tripRef.get().await().toObject(Trip::class.java)
                 if (trip != null && dayIndex < trip.itinerary.size) {
                     val updatedItinerary = trip.itinerary.toMutableList()
                     val day = updatedItinerary[dayIndex]
-                    val updatedActivities = day.activities.map { 
-                        if (it.id == activityId) it.copy(done = !it.done) else it
-                    }
-                    updatedItinerary[dayIndex] = day.copy(activities = updatedActivities)
-                    tripsRef.child(tripId).child("itinerary").setValue(updatedItinerary).await()
+                    updatedItinerary[dayIndex] = day.copy(
+                        activities = day.activities.map { if (it.id == activityId) it.copy(done = !it.done) else it }
+                    )
+                    tripRef.update("itinerary", updatedItinerary).await()
                     trySend(NetworkResult.Success(Unit))
+                } else {
+                    trySend(NetworkResult.Error("Khong tim thay du lieu"))
                 }
             } catch (e: Exception) {
-                trySend(NetworkResult.Error("Lỗi cập nhật trạng thái"))
+                trySend(NetworkResult.Error("Loi cap nhat trang thai"))
             } finally {
                 close()
             }
@@ -410,19 +332,19 @@ class TripRepositoryImpl @Inject constructor(
         trySend(NetworkResult.Loading)
         launch {
             try {
-                val snapshot = tripsRef.child(tripId).get().await()
-                val trip = snapshot.getValue(Trip::class.java)
+                val tripRef = tripsRef.document(tripId)
+                val trip = tripRef.get().await().toObject(Trip::class.java)
                 if (trip != null && dayIndex < trip.itinerary.size) {
                     val updatedItinerary = trip.itinerary.toMutableList()
                     val day = updatedItinerary[dayIndex]
-                    val updatedActivities = day.activities.filter { it.id != activityId }
-                    updatedItinerary[dayIndex] = day.copy(activities = updatedActivities)
-                    
-                    tripsRef.child(tripId).child("itinerary").setValue(updatedItinerary).await()
+                    updatedItinerary[dayIndex] = day.copy(activities = day.activities.filter { it.id != activityId })
+                    tripRef.update("itinerary", updatedItinerary).await()
                     trySend(NetworkResult.Success(Unit))
+                } else {
+                    trySend(NetworkResult.Error("Khong tim thay du lieu"))
                 }
             } catch (e: Exception) {
-                trySend(NetworkResult.Error("Lỗi xóa hoạt động"))
+                trySend(NetworkResult.Error("Loi xoa hoat dong"))
             } finally {
                 close()
             }
@@ -432,145 +354,110 @@ class TripRepositoryImpl @Inject constructor(
 
     override fun addExpense(expense: Expense): Flow<NetworkResult<Unit>> = callbackFlow {
         trySend(NetworkResult.Loading)
-        val expenseId = if (expense.id.isEmpty()) expensesRef.push().key ?: UUID.randomUUID().toString() else expense.id
+        val expenseId = expense.id.ifEmpty { expensesRef.document().id }
         val finalExpense = expense.copy(id = expenseId)
-        
-        expensesRef.child(expenseId).setValue(finalExpense).addOnSuccessListener {
-            trySend(NetworkResult.Success(Unit))
-            close()
-        }.addOnFailureListener { e ->
-            trySend(NetworkResult.Error("Lỗi lưu chi tiêu: ${e.message}"))
-            close()
-        }
+        expensesRef.document(expenseId).set(finalExpense)
+            .addOnSuccessListener {
+                trySend(NetworkResult.Success(Unit))
+                close()
+            }
+            .addOnFailureListener { e ->
+                trySend(NetworkResult.Error("Loi luu chi tieu: ${e.message}"))
+                close()
+            }
         awaitClose()
     }
 
     override fun updateExpense(expense: Expense): Flow<NetworkResult<Unit>> = callbackFlow {
         trySend(NetworkResult.Loading)
-        expensesRef.child(expense.id).setValue(expense).addOnSuccessListener {
-            trySend(NetworkResult.Success(Unit))
-            close()
-        }.addOnFailureListener { e ->
-            trySend(NetworkResult.Error("Lỗi cập nhật chi tiêu: ${e.message}"))
-            close()
-        }
+        expensesRef.document(expense.id).set(expense)
+            .addOnSuccessListener {
+                trySend(NetworkResult.Success(Unit))
+                close()
+            }
+            .addOnFailureListener { e ->
+                trySend(NetworkResult.Error("Loi cap nhat chi tieu: ${e.message}"))
+                close()
+            }
         awaitClose()
     }
 
     override fun deleteExpense(expenseId: String): Flow<NetworkResult<Unit>> = callbackFlow {
         trySend(NetworkResult.Loading)
-        expensesRef.child(expenseId).removeValue().addOnSuccessListener {
-            trySend(NetworkResult.Success(Unit))
-            close()
-        }.addOnFailureListener { e ->
-            trySend(NetworkResult.Error("Lỗi xóa chi tiêu"))
-            close()
-        }
+        expensesRef.document(expenseId).delete()
+            .addOnSuccessListener {
+                trySend(NetworkResult.Success(Unit))
+                close()
+            }
+            .addOnFailureListener {
+                trySend(NetworkResult.Error("Loi xoa chi tieu"))
+                close()
+            }
         awaitClose()
     }
 
     override fun getTripExpenses(tripId: String): Flow<NetworkResult<List<Expense>>> = callbackFlow {
         trySend(NetworkResult.Loading)
-        val listener = expensesRef.addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                try {
-                    val list = mutableListOf<Expense>()
-                    snapshot.children.forEach { child ->
-                        val expense = child.getValue(Expense::class.java)
-                        if (expense != null && expense.tripId == tripId) {
-                            list.add(expense)
-                        }
-                    }
-                    trySend(NetworkResult.Success(list))
-                } catch (e: Exception) {
-                    android.util.Log.e("TripRepo", "Error mapping expenses for trip $tripId", e)
-                }
+        val registration = expensesRef.whereEqualTo("tripId", tripId).addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                trySend(NetworkResult.Error("Loi tai chi tieu: ${error.message}"))
+                return@addSnapshotListener
             }
-
-            override fun onCancelled(error: DatabaseError) {
-                trySend(NetworkResult.Error("Lỗi tải chi tiêu: ${error.message}"))
+            try {
+                val list = snapshot?.documents?.mapNotNull { it.toObject(Expense::class.java)?.copy(id = it.id) }.orEmpty()
+                trySend(NetworkResult.Success(list))
+            } catch (e: Exception) {
+                android.util.Log.e("TripRepo", "Error mapping expenses for trip $tripId", e)
             }
-        })
-        awaitClose { expensesRef.removeEventListener(listener) }
+        }
+        awaitClose { registration.remove() }
     }
 
     override fun getAllExpenses(userId: String): Flow<NetworkResult<List<Expense>>> = callbackFlow {
         trySend(NetworkResult.Loading)
-        val listener = expensesRef.addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                try {
-                    val list = mutableListOf<Expense>()
-                    snapshot.children.forEach { child ->
-                        try {
-                            val expense = child.getValue(Expense::class.java)
-                            if (expense != null && expense.userId == userId) {
-                                list.add(expense)
-                            }
-                        } catch (e: Exception) {
-                            android.util.Log.e("TripRepo", "Error mapping expense: ${e.message}")
-                        }
-                    }
-                    trySend(NetworkResult.Success(list.sortedByDescending { it.date }))
-                } catch (e: Exception) {
-                    trySend(NetworkResult.Error("Lỗi xử lý dữ liệu chi tiêu"))
-                }
+        val registration = expensesRef.whereEqualTo("userId", userId).addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                trySend(NetworkResult.Error(error.message ?: "Loi tai chi tieu"))
+                return@addSnapshotListener
             }
-
-            override fun onCancelled(error: DatabaseError) {
-                trySend(NetworkResult.Error(error.message))
+            try {
+                val list = snapshot?.documents
+                    ?.mapNotNull { it.toObject(Expense::class.java)?.copy(id = it.id) }
+                    ?.sortedByDescending { it.date }
+                    .orEmpty()
+                trySend(NetworkResult.Success(list))
+            } catch (e: Exception) {
+                trySend(NetworkResult.Error("Loi xu ly du lieu chi tieu"))
             }
-        })
-        awaitClose { expensesRef.removeEventListener(listener) }
+        }
+        awaitClose { registration.remove() }
     }
 
     override fun addGalleryPhoto(tripId: String, photoUrl: String): Flow<NetworkResult<Unit>> = callbackFlow {
         trySend(NetworkResult.Loading)
-        val ref = tripsRef.child(tripId).child("galleryUrls")
-        
-        ref.runTransaction(object : com.google.firebase.database.Transaction.Handler {
-            override fun doTransaction(currentData: com.google.firebase.database.MutableData): com.google.firebase.database.Transaction.Result {
-                val list = currentData.children.mapNotNull { it.getValue(String::class.java) }.toMutableList()
-                if (!list.contains(photoUrl)) {
-                    list.add(photoUrl)
-                    currentData.value = list
-                }
-                return com.google.firebase.database.Transaction.success(currentData)
-            }
-
-            override fun onComplete(error: DatabaseError?, committed: Boolean, snapshot: DataSnapshot?) {
-                if (error != null) {
-                    trySend(NetworkResult.Error("Lỗi thêm ảnh: ${error.message}"))
-                } else {
-                    trySend(NetworkResult.Success(Unit))
-                }
+        tripsRef.document(tripId).update("galleryUrls", FieldValue.arrayUnion(photoUrl))
+            .addOnSuccessListener {
+                trySend(NetworkResult.Success(Unit))
                 close()
             }
-        })
+            .addOnFailureListener { e ->
+                trySend(NetworkResult.Error("Loi them anh: ${e.message}"))
+                close()
+            }
         awaitClose()
     }
 
     override fun deleteGalleryPhoto(tripId: String, photoUrl: String): Flow<NetworkResult<Unit>> = callbackFlow {
         trySend(NetworkResult.Loading)
-        val ref = tripsRef.child(tripId).child("galleryUrls")
-        
-        ref.runTransaction(object : com.google.firebase.database.Transaction.Handler {
-            override fun doTransaction(currentData: com.google.firebase.database.MutableData): com.google.firebase.database.Transaction.Result {
-                val list = currentData.children.mapNotNull { it.getValue(String::class.java) }.toMutableList()
-                if (list.remove(photoUrl)) {
-                    currentData.value = list
-                }
-                return com.google.firebase.database.Transaction.success(currentData)
-            }
-
-            override fun onComplete(error: DatabaseError?, committed: Boolean, snapshot: DataSnapshot?) {
-                if (error != null) {
-                    trySend(NetworkResult.Error("Lỗi xóa ảnh: ${error.message}"))
-                } else {
-                    trySend(NetworkResult.Success(Unit))
-                }
+        tripsRef.document(tripId).update("galleryUrls", FieldValue.arrayRemove(photoUrl))
+            .addOnSuccessListener {
+                trySend(NetworkResult.Success(Unit))
                 close()
             }
-        })
+            .addOnFailureListener { e ->
+                trySend(NetworkResult.Error("Loi xoa anh: ${e.message}"))
+                close()
+            }
         awaitClose()
     }
 
@@ -589,30 +476,26 @@ class TripRepositoryImpl @Inject constructor(
         awaitClose()
     }
 
-    // --- Group Management Implementation ---
-
     override fun getTripMembers(tripId: String): Flow<NetworkResult<List<TripMember>>> = callbackFlow {
         trySend(NetworkResult.Loading)
-        val listener = tripMembersRef.child(tripId).addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                try {
-                    val members = snapshot.children.mapNotNull { it.getValue(TripMember::class.java) }
-                    trySend(NetworkResult.Success(members))
-                } catch (e: Exception) {
-                    android.util.Log.e("TripRepo", "Error mapping members for trip $tripId", e)
-                }
+        val registration = tripMembers(tripId).addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                trySend(NetworkResult.Error("Loi tai thanh vien: ${error.message}"))
+                return@addSnapshotListener
             }
-
-            override fun onCancelled(error: DatabaseError) {
-                trySend(NetworkResult.Error("Lỗi tải thành viên: ${error.message}"))
+            try {
+                val members = snapshot?.documents?.mapNotNull { it.toObject(TripMember::class.java)?.copy(userId = it.id) }.orEmpty()
+                trySend(NetworkResult.Success(members))
+            } catch (e: Exception) {
+                android.util.Log.e("TripRepo", "Error mapping members for trip $tripId", e)
             }
-        })
-        awaitClose { tripMembersRef.child(tripId).removeEventListener(listener) }
+        }
+        awaitClose { registration.remove() }
     }
 
     override fun updateMemberRole(tripId: String, userId: String, role: String): Flow<NetworkResult<Unit>> = callbackFlow {
         trySend(NetworkResult.Loading)
-        tripMembersRef.child(tripId).child(userId).child("role").setValue(role)
+        tripMembers(tripId).document(userId).update("role", role)
             .addOnSuccessListener {
                 trySend(NetworkResult.Success(Unit))
                 close()
@@ -628,15 +511,14 @@ class TripRepositoryImpl @Inject constructor(
         trySend(NetworkResult.Loading)
         launch {
             try {
-                val updates = hashMapOf<String, Any>(
-                    "tripMembers/$tripId/$currentOwnerId/role" to TripMember.ROLE_EDITOR,
-                    "tripMembers/$tripId/$newOwnerId/role" to TripMember.ROLE_OWNER,
-                    "trips/$tripId/userId" to newOwnerId
-                )
-                database.reference.updateChildren(updates).await()
+                val batch = firestore.batch()
+                batch.update(tripMembers(tripId).document(currentOwnerId), "role", TripMember.ROLE_EDITOR)
+                batch.update(tripMembers(tripId).document(newOwnerId), "role", TripMember.ROLE_OWNER)
+                batch.update(tripsRef.document(tripId), "userId", newOwnerId)
+                batch.commit().await()
                 trySend(NetworkResult.Success(Unit))
             } catch (e: Exception) {
-                trySend(NetworkResult.Error("Lỗi chuyển quyền: ${e.message}"))
+                trySend(NetworkResult.Error("Loi chuyen quyen: ${e.message}"))
             } finally {
                 close()
             }
@@ -648,12 +530,10 @@ class TripRepositoryImpl @Inject constructor(
         trySend(NetworkResult.Loading)
         launch {
             try {
-                val updates = hashMapOf<String, Any?>(
-                    "tripMembers/$tripId/$userId" to null,
-                    "userTrips/$userId/$tripId" to null
-                )
-                database.reference.updateChildren(updates).await()
-                
+                val batch = firestore.batch()
+                batch.delete(tripMembers(tripId).document(userId))
+                batch.delete(userTrips(userId).document(tripId))
+                batch.commit().await()
                 trySend(NetworkResult.Success(Unit))
             } catch (e: Exception) {
                 trySend(NetworkResult.Error(e.message ?: "Failed to remove member"))
@@ -668,55 +548,29 @@ class TripRepositoryImpl @Inject constructor(
         val sanitizedCode = inviteCode.trim().uppercase()
         android.util.Log.d("TripRepo", "Join attempt with code: $sanitizedCode")
         trySend(NetworkResult.Loading)
-        
+
         launch {
             try {
-                // 1. PRIMARY SEARCH: Direct index lookup (Highest speed)
-                val tripIdSnap = inviteCodesRef.child(sanitizedCode).get().await()
-                var tripId = tripIdSnap.getValue(String::class.java)
-                
-                // 2. SECONDARY SEARCH: Direct query on 'trips' node (Reliability fallback)
+                val inviteDoc = inviteCodesRef.document(sanitizedCode).get().await()
+                var tripId = inviteDoc.getString("tripId")
+
                 if (tripId == null) {
-                    android.util.Log.w("TripRepo", "Index lookup failed, trying direct property search")
-                    val querySnap = try {
-                        tripsRef.orderByChild("inviteCode").equalTo(sanitizedCode).get().await()
-                    } catch (e: Exception) {
-                        android.util.Log.e("TripRepo", "Property search failed (likely missing index), falling back to deep scan", e)
-                        null // Force step 3
-                    }
-                    
-                    if (querySnap != null && querySnap.exists() && querySnap.childrenCount > 0) {
-                        tripId = querySnap.children.first().key
-                    }
+                    val querySnap = tripsRef.whereEqualTo("inviteCode", sanitizedCode).limit(1).get().await()
+                    tripId = querySnap.documents.firstOrNull()?.id
                 }
 
-                // 3. FINAL SEARCH: Case-insensitive deep scan (Ultimate fallback)
-                if (tripId == null) {
-                    android.util.Log.w("TripRepo", "Property search failed, performing case-insensitive scan")
-                    val allTripsSnap = tripsRef.get().await()
-                    tripId = allTripsSnap.children.find { 
-                        it.child("inviteCode").value?.toString()?.equals(sanitizedCode, ignoreCase = true) == true 
-                    }?.key
-                }
-                
                 if (tripId != null) {
-                    android.util.Log.i("TripRepo", "Code $sanitizedCode resolved to trip $tripId")
-                    
-                    // REPAIR logic: If we found it via fallback, repair the index for future fast access
-                    if (!tripIdSnap.exists()) {
-                        android.util.Log.i("TripRepo", "Repairing missing inviteCodes index for $sanitizedCode")
-                        inviteCodesRef.child(sanitizedCode).setValue(tripId)
+                    if (!inviteDoc.exists()) {
+                        inviteCodesRef.document(sanitizedCode).set(mapOf("tripId" to tripId)).await()
                     }
-                    
                     joinTripInternal(tripId, userId, userName, userPhotoUrl, this@callbackFlow)
                 } else {
-                    android.util.Log.e("TripRepo", "Invite code $sanitizedCode not found after triple-scan")
-                    trySend(NetworkResult.Error("Mã mời không tồn tại hoặc đã hết hạn"))
+                    trySend(NetworkResult.Error("Ma moi khong ton tai hoac da het han"))
                     close()
                 }
             } catch (e: Exception) {
                 android.util.Log.e("TripRepo", "Error joining trip via code", e)
-                trySend(NetworkResult.Error("Lỗi kết nối: ${e.message}"))
+                trySend(NetworkResult.Error("Loi ket noi: ${e.message}"))
                 close()
             }
         }
@@ -727,13 +581,13 @@ class TripRepositoryImpl @Inject constructor(
         trySend(NetworkResult.Loading)
         launch {
             try {
-                val tripIdSnap = shareTokensRef.child(shareToken).get().await()
-                val tripId = tripIdSnap.getValue(String::class.java)
-                
+                val tokenDoc = shareTokensRef.document(shareToken).get().await()
+                val tripId = tokenDoc.getString("tripId")
+
                 if (tripId != null) {
                     joinTripInternal(tripId, userId, userName, userPhotoUrl, this@callbackFlow)
                 } else {
-                    trySend(NetworkResult.Error("Link chia sẻ không hợp lệ"))
+                    trySend(NetworkResult.Error("Link chia se khong hop le"))
                     close()
                 }
             } catch (e: Exception) {
@@ -745,14 +599,14 @@ class TripRepositoryImpl @Inject constructor(
     }
 
     private suspend fun joinTripInternal(
-        tripId: String, 
-        userId: String, 
-        userName: String, 
+        tripId: String,
+        userId: String,
+        userName: String,
         userPhotoUrl: String?,
         channel: kotlinx.coroutines.channels.ProducerScope<NetworkResult<String>>
     ) {
-        // Check if already a member
-        val memberSnap = tripMembersRef.child(tripId).child(userId).get().await()
+        val memberRef = tripMembers(tripId).document(userId)
+        val memberSnap = memberRef.get().await()
         if (memberSnap.exists()) {
             channel.trySend(NetworkResult.Success(tripId))
             channel.close()
@@ -762,19 +616,17 @@ class TripRepositoryImpl @Inject constructor(
         val member = TripMember(
             userId = userId,
             tripId = tripId,
-            role = TripMember.ROLE_VIEWER, // Default role
+            role = TripMember.ROLE_VIEWER,
             status = TripMember.STATUS_JOINED,
             userName = userName,
             userPhotoUrl = userPhotoUrl
         )
 
-        // Atomic update for joining
-        val updates = hashMapOf<String, Any>(
-            "tripMembers/$tripId/$userId" to member,
-            "userTrips/$userId/$tripId" to true
-        )
-        database.reference.updateChildren(updates).await()
-        
+        val batch = firestore.batch()
+        batch.set(memberRef, member)
+        batch.set(userTrips(userId).document(tripId), mapOf("tripId" to tripId, "joinedAt" to System.currentTimeMillis()))
+        batch.commit().await()
+
         channel.trySend(NetworkResult.Success(tripId))
         channel.close()
     }
@@ -783,69 +635,68 @@ class TripRepositoryImpl @Inject constructor(
         trySend(NetworkResult.Loading)
         launch {
             try {
-                // Check if owner
-                val memberSnap = tripMembersRef.child(tripId).child(userId).get().await()
-                val member = memberSnap.getValue(TripMember::class.java)
-                
+                val member = tripMembers(tripId).document(userId).get().await().toObject(TripMember::class.java)
+
                 if (member?.role == TripMember.ROLE_OWNER) {
-                    // Check if other members exist
-                    val allMembersSnap = tripMembersRef.child(tripId).get().await()
-                    if (allMembersSnap.childrenCount > 1) {
-                        trySend(NetworkResult.Error("Vui lòng chuyển quyền chủ sở hữu trước khi rời nhóm"))
+                    val allMembers = tripMembers(tripId).get().await()
+                    if (allMembers.size() > 1) {
+                        trySend(NetworkResult.Error("Vui long chuyen quyen chu so huu truoc khi roi nhom"))
                         close()
                         return@launch
-                    } else {
-                        // Only member and owner, delete the trip atomically
-                        deleteTrip(tripId).collect { result ->
-                            if (result is NetworkResult.Success) {
+                    }
+
+                    deleteTrip(tripId).collect { result ->
+                        when (result) {
+                            is NetworkResult.Success -> {
                                 trySend(NetworkResult.Success(Unit))
                                 close()
-                            } else if (result is NetworkResult.Error) {
+                            }
+                            is NetworkResult.Error -> {
                                 trySend(NetworkResult.Error(result.message))
                                 close()
                             }
+                            NetworkResult.Loading -> Unit
                         }
                     }
                 } else {
-                    // Not owner, just remove atomically
-                    val updates = hashMapOf<String, Any?>(
-                        "tripMembers/$tripId/$userId" to null,
-                        "userTrips/$userId/$tripId" to null
-                    )
-                    database.reference.updateChildren(updates).await()
+                    val batch = firestore.batch()
+                    batch.delete(tripMembers(tripId).document(userId))
+                    batch.delete(userTrips(userId).document(tripId))
+                    batch.commit().await()
                     trySend(NetworkResult.Success(Unit))
                     close()
                 }
             } catch (e: Exception) {
                 trySend(NetworkResult.Error(e.message ?: "Error leaving trip"))
-            } finally {
                 close()
             }
         }
         awaitClose()
     }
 
-    override fun getTripLogs(tripId: String): Flow<NetworkResult<List<com.example.travelmate.domain.model.TripLog>>> = callbackFlow {
+    override fun getTripLogs(tripId: String): Flow<NetworkResult<List<TripLog>>> = callbackFlow {
         trySend(NetworkResult.Loading)
-        val listener = tripLogsRef.child(tripId).orderByChild("timestamp").limitToLast(100).addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
+        val registration = tripLogs(tripId)
+            .orderBy("timestamp", Query.Direction.DESCENDING)
+            .limit(100)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(NetworkResult.Error(error.message ?: "Failed to fetch logs"))
+                    return@addSnapshotListener
+                }
                 try {
-                    val logs = snapshot.children.mapNotNull { it.getValue(com.example.travelmate.domain.model.TripLog::class.java) }.reversed()
+                    val logs = snapshot?.documents?.mapNotNull { it.toObject(TripLog::class.java)?.copy(id = it.id) }.orEmpty()
                     trySend(NetworkResult.Success(logs))
                 } catch (e: Exception) {
                     android.util.Log.e("TripRepo", "Error mapping trip logs", e)
                 }
             }
-            override fun onCancelled(error: DatabaseError) {
-                trySend(NetworkResult.Error(error.message))
-            }
-        })
-        awaitClose { tripLogsRef.child(tripId).removeEventListener(listener) }
+        awaitClose { registration.remove() }
     }
 
-    override fun addTripLog(log: com.example.travelmate.domain.model.TripLog): Flow<NetworkResult<Unit>> = callbackFlow {
-        val logId = tripLogsRef.child(log.tripId).push().key ?: UUID.randomUUID().toString()
-        tripLogsRef.child(log.tripId).child(logId).setValue(log.copy(id = logId))
+    override fun addTripLog(log: TripLog): Flow<NetworkResult<Unit>> = callbackFlow {
+        val logId = log.id.ifEmpty { tripLogs(log.tripId).document().id }
+        tripLogs(log.tripId).document(logId).set(log.copy(id = logId))
             .addOnSuccessListener {
                 trySend(NetworkResult.Success(Unit))
                 close()
@@ -859,20 +710,15 @@ class TripRepositoryImpl @Inject constructor(
 
     override suspend fun updateUserInTripMembers(userId: String, newName: String, newPhotoUrl: String?) {
         try {
-            val snapshot = userTripsRef.child(userId).get().await()
-            if (snapshot.exists()) {
-                val updates = hashMapOf<String, Any?>()
-                snapshot.children.forEach { childSnapshot ->
-                    val tripId = childSnapshot.key
-                    if (tripId != null) {
-                        updates["tripMembers/$tripId/$userId/userName"] = newName
-                        updates["tripMembers/$tripId/$userId/userPhotoUrl"] = newPhotoUrl
-                    }
+            val snapshot = userTrips(userId).get().await()
+            if (!snapshot.isEmpty) {
+                val batch = firestore.batch()
+                snapshot.documents.forEach { doc ->
+                    val updates = mapOf("userName" to newName, "userPhotoUrl" to newPhotoUrl)
+                    batch.update(tripMembers(doc.id).document(userId), updates)
                 }
-                if (updates.isNotEmpty()) {
-                    database.reference.updateChildren(updates).await()
-                    android.util.Log.d("TripRepo", "Successfully updated user info in ${updates.size / 2} trip member locations")
-                }
+                batch.commit().await()
+                android.util.Log.d("TripRepo", "Successfully updated user info in ${snapshot.size()} trip member locations")
             }
         } catch (e: Exception) {
             android.util.Log.e("TripRepo", "Error updating user info in trip members: ${e.message}")
