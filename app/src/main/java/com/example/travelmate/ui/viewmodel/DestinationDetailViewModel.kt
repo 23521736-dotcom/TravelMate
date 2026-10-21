@@ -2,6 +2,11 @@ package com.example.travelmate.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.travelmate.data.remote.ForecastDayData
+import com.example.travelmate.data.remote.WeatherUiData
+import com.example.travelmate.data.remote.getTravelAdvice
+import com.example.travelmate.data.remote.parseWmoCode
+import com.example.travelmate.data.model.toDomainModel
 import com.example.travelmate.domain.model.Destination
 import com.example.travelmate.domain.model.Review
 import com.example.travelmate.domain.repository.DestinationRepository
@@ -19,7 +24,12 @@ import javax.inject.Inject
 data class DestinationDetailUiState(
     val destination: Destination? = null,
     val reviews: List<Review> = emptyList(),
+    val nearbyPlaces: List<Destination> = emptyList(),
+    val weatherData: WeatherUiData? = null,
+    val wikiSummary: String? = null,
+    val wikiPageUrl: String? = null,
     val isLoading: Boolean = false,
+    val isNearbyLoading: Boolean = false,
     val error: String? = null
 )
 
@@ -36,9 +46,10 @@ class DestinationDetailViewModel @Inject constructor(
     private var reviewsJob: Job? = null
 
     fun getDestination(id: String) {
-        if (destinationJob?.isActive == true) return
+        if (destinationJob?.isActive == true && _uiState.value.destination?.id == id) return
 
         destinationJob = viewModelScope.launch {
+            // First load basic destination info
             destinationRepository.getDestinationById(id).collect { result ->
                 when (result) {
                     is NetworkResult.Loading -> {
@@ -47,11 +58,59 @@ class DestinationDetailViewModel @Inject constructor(
                         }
                     }
                     is NetworkResult.Success -> {
-                        _uiState.update { it.copy(isLoading = false, destination = result.data, error = null) }
-                        // Fetch reviews immediately after destination is loaded successfully
+                        val basicDest = result.data
+                        _uiState.update { it.copy(destination = basicDest, error = null) }
                         getReviews(id)
+                        
+                        // Load full SSOT bundle (Wikipedia, Weather, Nearby Places)
+                        loadFullDetailBundle(id, basicDest.name, basicDest.latitude, basicDest.longitude)
                     }
                     is NetworkResult.Error -> _uiState.update { it.copy(isLoading = false, error = result.message) }
+                }
+            }
+        }
+    }
+
+    private fun loadFullDetailBundle(id: String, name: String, lat: Double, lon: Double) {
+        viewModelScope.launch {
+            destinationRepository.getDestinationDetail(id, name, lat, lon).collect { res ->
+                if (res is NetworkResult.Success) {
+                    val bundle = res.data
+                    val destEntity = bundle.destination
+                    val weatherEntity = bundle.weather
+                    
+                    // Parse weather entity to WeatherUiData
+                    val weatherUi = if (weatherEntity != null) {
+                        val (icon, text) = parseWmoCode(weatherEntity.currentWeatherCode)
+                        val advice = getTravelAdvice(weatherEntity.currentWeatherCode)
+                        val days = weatherEntity.forecastDays.mapIndexed { index, model ->
+                            val dayNames = listOf("Hôm nay", "Ngày mai", "Ngày kia")
+                            val (dayIcon, _) = parseWmoCode(model.weatherCode)
+                            ForecastDayData(
+                                dayName = dayNames.getOrElse(index) { "Ngày ${index + 1}" },
+                                icon = dayIcon,
+                                tempRange = "${model.minTemp.toInt()}° - ${model.maxTemp.toInt()}°C"
+                            )
+                        }
+                        WeatherUiData(
+                            currentTemp = weatherEntity.currentTemp.toInt(),
+                            weatherText = text,
+                            weatherIcon = icon,
+                            travelAdvice = advice,
+                            forecastDays = days
+                        )
+                    } else null
+
+                    _uiState.update { state ->
+                        state.copy(
+                            isLoading = false,
+                            destination = destEntity.toDomainModel(),
+                            weatherData = weatherUi ?: state.weatherData,
+                            wikiSummary = destEntity.wikiDescription ?: state.wikiSummary,
+                            wikiPageUrl = destEntity.wikiArticleUrl ?: state.wikiPageUrl,
+                            nearbyPlaces = if (bundle.nearbyPlaces.isNotEmpty()) bundle.nearbyPlaces else state.nearbyPlaces
+                        )
+                    }
                 }
             }
         }

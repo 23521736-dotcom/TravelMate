@@ -28,4 +28,13 @@ interface GeoapifyApiService {
         @Query("apiKey") apiKey: String,
         @Query("lang") lang: String = "vi"
     ): GeoapifySearchResponse
+
+    @GET("v2/places")
+    suspend fun getNearbyPlaces(
+        @Query("categories") categories: String = "tourism.sights,tourism.attraction,leisure,catering",
+        @Query("filter") filter: String,
+        @Query("limit") limit: Int = 10,
+        @Query("apiKey") apiKey: String,
+        @Query("lang") lang: String = "vi"
+    ): GeoapifySearchResponse
 }

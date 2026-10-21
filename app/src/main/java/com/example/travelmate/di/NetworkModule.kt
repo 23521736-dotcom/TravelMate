@@ -98,4 +98,16 @@ object NetworkModule {
         // BaseUrl is overridden in @GET annotations in ImageSearchApiService, so we can reuse a Retrofit instance
         return retrofit.create(com.example.travelmate.data.remote.ImageSearchApiService::class.java)
     }
+
+    @Provides
+    @Singleton
+    fun provideWeatherApiService(@javax.inject.Named("GeoapifyRetrofit") retrofit: Retrofit): com.example.travelmate.data.remote.WeatherApiService {
+        return retrofit.create(com.example.travelmate.data.remote.WeatherApiService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideWikipediaApiService(@javax.inject.Named("GeoapifyRetrofit") retrofit: Retrofit): com.example.travelmate.data.remote.WikipediaApiService {
+        return retrofit.create(com.example.travelmate.data.remote.WikipediaApiService::class.java)
+    }
 }

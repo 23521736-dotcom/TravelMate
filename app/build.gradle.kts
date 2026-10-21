@@ -116,6 +116,9 @@ dependencies {
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")
 
+    // Chrome Custom Tabs
+    implementation("androidx.browser:browser:1.8.0")
+
     // Email
     implementation(libs.sun.mail)
     implementation(libs.sun.activation)

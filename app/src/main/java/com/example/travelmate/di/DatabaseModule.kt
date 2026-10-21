@@ -30,4 +30,10 @@ object DatabaseModule {
     fun provideDestinationDao(appDatabase: AppDatabase): DestinationDao {
         return appDatabase.destinationDao()
     }
+
+    @Provides
+    @Singleton
+    fun provideWeatherDao(appDatabase: AppDatabase): com.example.travelmate.data.local.WeatherDao {
+        return appDatabase.weatherDao()
+    }
 }

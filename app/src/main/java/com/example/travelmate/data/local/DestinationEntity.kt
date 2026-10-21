@@ -27,7 +27,10 @@ data class DestinationEntity(
     val longitude: Double,
     val isPromoted: Boolean,
     val avgPricePerDay: Double,
-    val cacheTimestamp: Long
+    val cacheTimestamp: Long = System.currentTimeMillis(),
+    val wikiDescription: String? = null,
+    val wikiArticleUrl: String? = null,
+    val wikiLastUpdated: Long = 0L
 )
 
 class Converters {
@@ -38,6 +41,20 @@ class Converters {
 
     @TypeConverter
     fun toStringList(value: String): List<String> {
+        return try {
+            Json.decodeFromString(value)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    @TypeConverter
+    fun fromDayForecastList(value: List<DayForecastModel>): String {
+        return Json.encodeToString(value)
+    }
+
+    @TypeConverter
+    fun toDayForecastList(value: String): List<DayForecastModel> {
         return try {
             Json.decodeFromString(value)
         } catch (e: Exception) {

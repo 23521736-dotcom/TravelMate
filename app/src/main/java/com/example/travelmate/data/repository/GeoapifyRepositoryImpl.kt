@@ -38,18 +38,10 @@ class GeoapifyRepositoryImpl @Inject constructor(
         try {
             val response = apiService.searchPlaces(text = trimmed, apiKey = geoapifyKey, limit = 10, lang = "vi")
             val destinations = response.features.map { feature ->
-                // First get basic destination to get the name for image search
                 val basicDest = feature.toDestination(geoapifyKey)
-                
-                // Fetch image from Unsplash/Pixabay
                 val photoUrl = fetchImageForPlace(basicDest.name)
-                
-                // Re-create destination with real photo
                 val fullDest = feature.toDestination(geoapifyKey, photoUrl)
-                
-                // Cache into Room database
                 destinationDao.insertDestination(fullDest.toEntity())
-                
                 fullDest
             }
             emit(NetworkResult.Success(destinations))
@@ -60,7 +52,6 @@ class GeoapifyRepositoryImpl @Inject constructor(
     }.flowOn(Dispatchers.IO)
 
     override fun getPlaceDetailsOnline(placeId: String): Flow<NetworkResult<Destination>> = flow {
-        // Try getting from Room DB first
         val cachedEntity = destinationDao.getDestinationByIdSync(placeId)
         if (cachedEntity != null) {
             emit(NetworkResult.Success(cachedEntity.toDomainModel()))
@@ -75,15 +66,13 @@ class GeoapifyRepositoryImpl @Inject constructor(
             if (feature != null) {
                 val basicDest = feature.toDestination(geoapifyKey)
                 val finalDest = basicDest.copy(id = placeId)
-                
-                // If it's a new place (not in DB), fetch image and save
                 if (cachedEntity == null) {
                     val photoUrl = fetchImageForPlace(finalDest.name)
                     val fullDest = feature.toDestination(geoapifyKey, photoUrl).copy(id = placeId)
                     destinationDao.insertDestination(fullDest.toEntity())
                     emit(NetworkResult.Success(fullDest))
                 } else {
-                    emit(NetworkResult.Success(finalDest)) // Already cached
+                    emit(NetworkResult.Success(finalDest))
                 }
             } else if (cachedEntity != null) {
                 emit(NetworkResult.Success(cachedEntity.toDomainModel()))
@@ -100,14 +89,35 @@ class GeoapifyRepositoryImpl @Inject constructor(
         }
     }.flowOn(Dispatchers.IO)
 
+    override fun getNearbyPlacesOnline(lat: Double, lon: Double, limit: Int): Flow<NetworkResult<List<Destination>>> = flow {
+        emit(NetworkResult.Loading)
+        try {
+            val filter = "circle:$lon,$lat,15000"
+            val response = apiService.getNearbyPlaces(
+                categories = "tourism.sights,tourism.attraction",
+                filter = filter,
+                limit = limit,
+                apiKey = geoapifyKey,
+                lang = "vi"
+            )
+            val destinations = response.features.mapNotNull { feature ->
+                val dest = feature.toDestination(geoapifyKey)
+                if (dest.name.isBlank()) null else dest
+            }
+            emit(NetworkResult.Success(destinations))
+        } catch (e: Exception) {
+            android.util.Log.e("GeoapifyRepo", "Error fetching nearby places", e)
+            emit(NetworkResult.Error(e.localizedMessage ?: e.message ?: "Lỗi tải điểm tham quan lân cận"))
+        }
+    }.flowOn(Dispatchers.IO)
+
     override fun getCachedDestination(id: String): Destination? {
         return null
     }
 
     private suspend fun fetchImageForPlace(placeName: String): String? {
-        val searchQuery = "$placeName travel panorama" // Magic keyword to get wide scenic shots
+        val searchQuery = "$placeName travel panorama"
         
-        // Try Unsplash first
         try {
             val unsplashResp = imageApiService.searchUnsplash(
                 query = searchQuery,
@@ -119,7 +129,6 @@ class GeoapifyRepositoryImpl @Inject constructor(
             android.util.Log.w("GeoapifyRepo", "Unsplash API failed: ${e.message}")
         }
         
-        // Fallback to Pixabay
         try {
             val pixabayResp = imageApiService.searchPixabay(
                 query = searchQuery,
@@ -131,6 +140,6 @@ class GeoapifyRepositoryImpl @Inject constructor(
             android.util.Log.w("GeoapifyRepo", "Pixabay API failed: ${e.message}")
         }
         
-        return null // Return null if both fail, the toDestination mapper will use curated default
+        return null
     }
 }

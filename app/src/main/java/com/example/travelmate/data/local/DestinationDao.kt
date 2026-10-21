@@ -37,4 +37,7 @@ interface DestinationDao {
 
     @Query("DELETE FROM destinations")
     fun deleteAllDestinations(): Int
+
+    @Query("UPDATE destinations SET wikiDescription = :desc, wikiArticleUrl = :url, wikiLastUpdated = :timestamp WHERE id = :id")
+    fun updateWikiInfo(id: String, desc: String?, url: String?, timestamp: Long): Int
 }

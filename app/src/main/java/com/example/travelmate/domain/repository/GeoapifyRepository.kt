@@ -7,5 +7,6 @@ import kotlinx.coroutines.flow.Flow
 interface GeoapifyRepository {
     fun searchPlacesOnline(query: String): Flow<NetworkResult<List<Destination>>>
     fun getPlaceDetailsOnline(placeId: String): Flow<NetworkResult<Destination>>
+    fun getNearbyPlacesOnline(lat: Double, lon: Double, limit: Int = 10): Flow<NetworkResult<List<Destination>>>
     fun getCachedDestination(id: String): Destination?
 }
