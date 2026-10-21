@@ -36,6 +36,8 @@ android {
         buildConfigField("String", "GROQ_API_KEY", "\"${localProperties.getProperty("GROQ_API_KEY") ?: ""}\"")
         buildConfigField("String", "SUPABASE_KEY", "\"${localProperties.getProperty("SUPABASE_KEY") ?: ""}\"")
         buildConfigField("String", "GEOAPIFY_API_KEY", "\"${localProperties.getProperty("GEOAPIFY_API_KEY") ?: "fc415480b8b0473790661a20b28ac855"}\"")
+        buildConfigField("String", "UNSPLASH_ACCESS_KEY", "\"WvG-Zx-HmPjQyVyGVYJbxyxqe9YZGnKfL5_Q1UqEwKM\"")
+        buildConfigField("String", "PIXABAY_API_KEY", "\"58151944-4ee70ecb45c3dc292f74bd6e7\"")
     }
 
     buildTypes {
@@ -103,6 +105,16 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging)
     implementation(libs.androidx.datastore.preferences)
+
+    // Room Database
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
+
+    // Room Database
+    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("androidx.room:room-ktx:2.6.1")
+    ksp("androidx.room:room-compiler:2.6.1")
 
     // Email
     implementation(libs.sun.mail)

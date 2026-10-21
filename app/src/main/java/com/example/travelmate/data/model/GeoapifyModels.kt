@@ -61,7 +61,7 @@ data class GeoapifyGeometry(
     @SerialName("coordinates") val coordinates: List<Double> = emptyList()
 )
 
-fun GeoapifyFeature.toDestination(apiKey: String): Destination {
+fun GeoapifyFeature.toDestination(apiKey: String, photoUrl: String? = null): Destination {
     val props = properties ?: GeoapifyProperties()
     val placeName = props.name?.ifBlank { null }
         ?: props.addressLine1?.ifBlank { null }
@@ -80,8 +80,8 @@ fun GeoapifyFeature.toDestination(apiKey: String): Destination {
     // High resolution Geoapify Static Map image centered on lat/lon with marker
     val staticMapUrl = "https://maps.geoapify.com/v1/staticmap?style=osm-bright&width=800&height=500&center=lonlat:$longitudeVal,$latitudeVal&zoom=16&marker=lonlat:$longitudeVal,$latitudeVal;color:%230284c7;size:medium&apiKey=$apiKey"
 
-    // Category-specific real photo matching place category/type
-    val categoryPhotoUrl = getCategoryPhoto(props.category, props.categories, props.resultType, placeName)
+    // Primary real scenery photo from Unsplash/Pixabay
+    val categoryPhotoUrl = photoUrl ?: getCategoryPhoto(props.category, props.categories, props.resultType, placeName)
 
     val categoryTagsList = getCategoryTags(props.category, props.categories, props.resultType)
 
@@ -97,8 +97,8 @@ fun GeoapifyFeature.toDestination(apiKey: String): Destination {
         rating = 4.7,
         reviewCount = 35,
         categoryTags = categoryTagsList,
-        imageUrls = listOf(staticMapUrl, categoryPhotoUrl),
-        coverImage = staticMapUrl,
+        imageUrls = listOf(categoryPhotoUrl, staticMapUrl),
+        coverImage = categoryPhotoUrl,
         unesco = props.categories.any { it.contains("heritage") || it.contains("attraction") } || props.category?.contains("tourism") == true,
         priceLevel = 2,
         latitude = latitudeVal,
