@@ -171,7 +171,14 @@ class AuthRepositoryImpl @Inject constructor(
                 totalSpent = safeDouble("totalSpent"),
                 upcomingTrips = safeInt("upcomingTrips"),
                 interests = interests,
-                wishlistIds = (data["wishlistIds"] as? List<*>)?.mapNotNull { it as? String }.orEmpty()
+                wishlistIds = (data["wishlistIds"] as? List<*>)?.mapNotNull { it as? String }.orEmpty(),
+                cccdNumber = data["cccdNumber"] as? String,
+                cccdFullName = data["cccdFullName"] as? String,
+                cccdDob = data["cccdDob"] as? String,
+                cccdGender = data["cccdGender"] as? String,
+                cccdAddress = data["cccdAddress"] as? String,
+                cccdPhotoBase64 = data["cccdPhotoBase64"] as? String,
+                isCccdVerified = data["isCccdVerified"] as? Boolean ?: false
             )
         } catch (e: Exception) {
             User(uid = uid, email = "", fullName = "User")
@@ -474,6 +481,41 @@ class AuthRepositoryImpl @Inject constructor(
             NetworkResult.Success(Unit)
         } catch (e: Exception) {
             NetworkResult.Error(e.message ?: "Loi")
+        }
+    }
+
+    override fun saveCccdVerification(
+        cccdNumber: String,
+        fullName: String,
+        dob: String,
+        gender: String,
+        address: String,
+        photoBase64: String?
+    ): Flow<NetworkResult<User>> = flow {
+        emit(NetworkResult.Loading)
+        val current = preferenceDataStore.currentUser.first() ?: getCurrentUser()
+        if (current == null) {
+            emit(NetworkResult.Error("Người dùng chưa đăng nhập"))
+            return@flow
+        }
+
+        val updatedUser = current.copy(
+            cccdNumber = cccdNumber,
+            cccdFullName = fullName,
+            cccdDob = dob,
+            cccdGender = gender,
+            cccdAddress = address,
+            cccdPhotoBase64 = photoBase64,
+            isCccdVerified = true
+        )
+
+        try {
+            usersRef.document(current.uid).set(updatedUser, SetOptions.merge()).await()
+            preferenceDataStore.saveUser(updatedUser)
+            emit(NetworkResult.Success(updatedUser))
+        } catch (e: Exception) {
+            preferenceDataStore.saveUser(updatedUser)
+            emit(NetworkResult.Success(updatedUser))
         }
     }
 }

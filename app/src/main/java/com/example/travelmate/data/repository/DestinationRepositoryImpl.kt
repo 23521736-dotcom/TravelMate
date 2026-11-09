@@ -3,6 +3,7 @@ package com.example.travelmate.data.repository
 import android.content.Context
 import com.example.travelmate.data.local.DayForecastModel
 import com.example.travelmate.data.local.DestinationDao
+import com.example.travelmate.data.local.DestinationEntity
 import com.example.travelmate.data.local.WeatherDao
 import com.example.travelmate.data.local.WeatherForecastEntity
 import com.example.travelmate.data.model.toDomainModel
@@ -19,8 +20,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 
 class DestinationRepositoryImpl @Inject constructor(
@@ -35,13 +38,24 @@ class DestinationRepositoryImpl @Inject constructor(
 
     override fun getDestinations(): Flow<NetworkResult<List<Destination>>> = flow {
         emit(NetworkResult.Loading)
-        val initialEntities = destinationDao.getAllDestinationsSync()
-        if (initialEntities.isEmpty()) {
-            seedPopularPlacesIntoRoom()
+        try {
+            val initialEntities = destinationDao.getAllDestinationsSync()
+            if (initialEntities.isEmpty()) {
+                seedPopularPlacesIntoRoom()
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("DestRepository", "Error checking initial Room entities", e)
         }
-        destinationDao.getAllDestinations().collect { entities ->
-            emit(NetworkResult.Success(entities.map { it.toDomainModel() }))
-        }
+
+        destinationDao.getAllDestinations()
+            .map<List<DestinationEntity>, NetworkResult<List<Destination>>> { entities ->
+                NetworkResult.Success(entities.map { it.toDomainModel() })
+            }
+            .catch { e ->
+                android.util.Log.e("DestRepository", "Error in getAllDestinations flow", e)
+                emit(NetworkResult.Success(emptyList()))
+            }
+            .collect { emit(it) }
     }.flowOn(Dispatchers.IO)
 
     override fun getDestinationById(id: String): Flow<NetworkResult<Destination>> {
@@ -58,8 +72,17 @@ class DestinationRepositoryImpl @Inject constructor(
         val now = System.currentTimeMillis()
 
         // 1. Read cached data from Room DB
-        val localDest = destinationDao.getDestinationByIdSync(destinationId)
-        val localWeather = weatherDao.getWeatherByDestinationIdSync(destinationId)
+        val localDest = try {
+            destinationDao.getDestinationByIdSync(destinationId)
+        } catch (_: Exception) {
+            null
+        }
+
+        val localWeather = try {
+            weatherDao.getWeatherByDestinationIdSync(destinationId)
+        } catch (_: Exception) {
+            null
+        }
 
         // Emit local data immediately if available
         if (localDest != null) {
@@ -148,8 +171,17 @@ class DestinationRepositoryImpl @Inject constructor(
         }
 
         // Re-read updated local DB entities and emit final bundle
-        val finalDest = destinationDao.getDestinationByIdSync(destinationId) ?: localDest
-        val finalWeather = weatherDao.getWeatherByDestinationIdSync(destinationId) ?: localWeather
+        val finalDest = try {
+            destinationDao.getDestinationByIdSync(destinationId) ?: localDest
+        } catch (_: Exception) {
+            localDest
+        }
+
+        val finalWeather = try {
+            weatherDao.getWeatherByDestinationIdSync(destinationId) ?: localWeather
+        } catch (_: Exception) {
+            localWeather
+        }
 
         if (finalDest != null) {
             emit(NetworkResult.Success(DestinationDetailBundle(finalDest, finalWeather, nearbyList)))
@@ -160,12 +192,45 @@ class DestinationRepositoryImpl @Inject constructor(
 
     override fun getRecommendedDestinations(limit: Int): Flow<NetworkResult<List<Destination>>> = flow {
         emit(NetworkResult.Loading)
-        val initialEntities = destinationDao.getTopDestinationsSync()
-        if (initialEntities.isEmpty()) {
-            seedPopularPlacesIntoRoom()
+        try {
+            val initialEntities = destinationDao.getTopDestinationsSync()
+            if (initialEntities.isEmpty()) {
+                seedPopularPlacesIntoRoom()
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("DestRepository", "Error checking top destinations", e)
         }
-        destinationDao.getTopDestinations().collect { entities ->
-            emit(NetworkResult.Success(entities.map { it.toDomainModel() }.take(limit)))
+
+        destinationDao.getTopDestinations()
+            .map<List<DestinationEntity>, NetworkResult<List<Destination>>> { entities ->
+                NetworkResult.Success(entities.map { it.toDomainModel() }.take(limit))
+            }
+            .catch { e ->
+                android.util.Log.e("DestRepository", "Error in getRecommendedDestinations flow", e)
+                emit(NetworkResult.Success(emptyList()))
+            }
+            .collect { emit(it) }
+    }.flowOn(Dispatchers.IO)
+
+    override fun getSavedOfflineDestinations(): Flow<NetworkResult<List<Destination>>> {
+        return destinationDao.getSavedOfflineDestinations()
+            .map<List<DestinationEntity>, NetworkResult<List<Destination>>> { entities ->
+                NetworkResult.Success(entities.map { it.toDomainModel() })
+            }
+            .catch { e ->
+                android.util.Log.e("DestRepository", "Error in getSavedOfflineDestinations flow", e)
+                emit(NetworkResult.Success(emptyList()))
+            }
+            .flowOn(Dispatchers.IO)
+    }
+
+    override fun toggleOfflineSavedStatus(destinationId: String, isSaved: Boolean): Flow<NetworkResult<Boolean>> = flow {
+        emit(NetworkResult.Loading)
+        try {
+            destinationDao.updateOfflineSavedStatus(destinationId, isSaved)
+            emit(NetworkResult.Success(isSaved))
+        } catch (e: Exception) {
+            emit(NetworkResult.Error("Lỗi lưu offline: ${e.message}"))
         }
     }.flowOn(Dispatchers.IO)
 

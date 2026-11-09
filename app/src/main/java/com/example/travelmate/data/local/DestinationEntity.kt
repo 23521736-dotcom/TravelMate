@@ -30,7 +30,8 @@ data class DestinationEntity(
     val cacheTimestamp: Long = System.currentTimeMillis(),
     val wikiDescription: String? = null,
     val wikiArticleUrl: String? = null,
-    val wikiLastUpdated: Long = 0L
+    val wikiLastUpdated: Long = 0L,
+    val isSavedOffline: Boolean = false
 )
 
 class Converters {
@@ -59,6 +60,34 @@ class Converters {
             Json.decodeFromString(value)
         } catch (e: Exception) {
             emptyList()
+        }
+    }
+
+    @TypeConverter
+    fun fromItineraryDayList(value: List<com.example.travelmate.domain.model.ItineraryDay>): String {
+        return Json.encodeToString(value)
+    }
+
+    @TypeConverter
+    fun toItineraryDayList(value: String): List<com.example.travelmate.domain.model.ItineraryDay> {
+        return try {
+            Json.decodeFromString(value)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    @TypeConverter
+    fun fromSyncStatus(value: SyncStatus): String {
+        return value.name
+    }
+
+    @TypeConverter
+    fun toSyncStatus(value: String): SyncStatus {
+        return try {
+            SyncStatus.valueOf(value)
+        } catch (e: Exception) {
+            SyncStatus.SYNCED
         }
     }
 }

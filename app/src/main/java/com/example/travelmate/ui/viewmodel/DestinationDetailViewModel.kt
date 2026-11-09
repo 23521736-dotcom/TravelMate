@@ -43,36 +43,56 @@ class DestinationDetailViewModel @Inject constructor(
     val uiState: StateFlow<DestinationDetailUiState> = _uiState.asStateFlow()
 
     private var destinationJob: Job? = null
+    private var detailBundleJob: Job? = null
     private var reviewsJob: Job? = null
 
     fun getDestination(id: String) {
-        if (destinationJob?.isActive == true && _uiState.value.destination?.id == id) return
+        if (_uiState.value.destination?.id == id && !_uiState.value.isLoading) return
+
+        // Cancel all ongoing jobs for previous destination
+        destinationJob?.cancel()
+        detailBundleJob?.cancel()
+        reviewsJob?.cancel()
+
+        // Reset UI state for new destination immediately
+        _uiState.update {
+            DestinationDetailUiState(
+                destination = null,
+                reviews = emptyList(),
+                nearbyPlaces = emptyList(),
+                weatherData = null,
+                wikiSummary = null,
+                wikiPageUrl = null,
+                isLoading = true,
+                isNearbyLoading = true,
+                error = null
+            )
+        }
 
         destinationJob = viewModelScope.launch {
             // First load basic destination info
             destinationRepository.getDestinationById(id).collect { result ->
                 when (result) {
                     is NetworkResult.Loading -> {
-                        if (_uiState.value.destination == null) {
-                            _uiState.update { it.copy(isLoading = true) }
-                        }
+                        _uiState.update { it.copy(isLoading = true) }
                     }
                     is NetworkResult.Success -> {
                         val basicDest = result.data
                         _uiState.update { it.copy(destination = basicDest, error = null) }
                         getReviews(id)
                         
-                        // Load full SSOT bundle (Wikipedia, Weather, Nearby Places)
+                        // Load full SSOT bundle (Wikipedia, Weather, Nearby Places) for THIS new destination
                         loadFullDetailBundle(id, basicDest.name, basicDest.latitude, basicDest.longitude)
                     }
-                    is NetworkResult.Error -> _uiState.update { it.copy(isLoading = false, error = result.message) }
+                    is NetworkResult.Error -> _uiState.update { it.copy(isLoading = false, isNearbyLoading = false, error = result.message) }
                 }
             }
         }
     }
 
     private fun loadFullDetailBundle(id: String, name: String, lat: Double, lon: Double) {
-        viewModelScope.launch {
+        detailBundleJob?.cancel()
+        detailBundleJob = viewModelScope.launch {
             destinationRepository.getDestinationDetail(id, name, lat, lon).collect { res ->
                 if (res is NetworkResult.Success) {
                     val bundle = res.data
@@ -102,14 +122,20 @@ class DestinationDetailViewModel @Inject constructor(
                     } else null
 
                     _uiState.update { state ->
-                        state.copy(
-                            isLoading = false,
-                            destination = destEntity.toDomainModel(),
-                            weatherData = weatherUi ?: state.weatherData,
-                            wikiSummary = destEntity.wikiDescription ?: state.wikiSummary,
-                            wikiPageUrl = destEntity.wikiArticleUrl ?: state.wikiPageUrl,
-                            nearbyPlaces = if (bundle.nearbyPlaces.isNotEmpty()) bundle.nearbyPlaces else state.nearbyPlaces
-                        )
+                        // Ensure update applies only if destination ID matches
+                        if (state.destination == null || state.destination.id == id) {
+                            state.copy(
+                                isLoading = false,
+                                isNearbyLoading = false,
+                                destination = destEntity.toDomainModel(),
+                                weatherData = weatherUi,
+                                wikiSummary = destEntity.wikiDescription,
+                                wikiPageUrl = destEntity.wikiArticleUrl,
+                                nearbyPlaces = bundle.nearbyPlaces
+                            )
+                        } else {
+                            state
+                        }
                     }
                 }
             }
@@ -166,9 +192,26 @@ class DestinationDetailViewModel @Inject constructor(
         }
     }
 
+    fun toggleSaveOffline() {
+        val dest = _uiState.value.destination ?: return
+        viewModelScope.launch {
+            val newState = !dest.isSavedOffline
+            destinationRepository.toggleOfflineSavedStatus(dest.id, newState).collect { res ->
+                if (res is NetworkResult.Success) {
+                    _uiState.update { state ->
+                        state.copy(
+                            destination = state.destination?.copy(isSavedOffline = newState)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         destinationJob?.cancel()
+        detailBundleJob?.cancel()
         reviewsJob?.cancel()
     }
 }

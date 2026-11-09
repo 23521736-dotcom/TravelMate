@@ -19,5 +19,12 @@ data class User(
     val totalSpent: Double = 0.0,
     val upcomingTrips: Int = 0,
     val interests: List<Category> = emptyList(),
-    val wishlistIds: List<String> = emptyList()
+    val wishlistIds: List<String> = emptyList(),
+    val cccdNumber: String? = null,
+    val cccdFullName: String? = null,
+    val cccdDob: String? = null,
+    val cccdGender: String? = null,
+    val cccdAddress: String? = null,
+    val cccdPhotoBase64: String? = null,
+    val isCccdVerified: Boolean = false
 )

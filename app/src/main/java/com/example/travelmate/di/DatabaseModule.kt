@@ -36,4 +36,22 @@ object DatabaseModule {
     fun provideWeatherDao(appDatabase: AppDatabase): com.example.travelmate.data.local.WeatherDao {
         return appDatabase.weatherDao()
     }
+
+    @Provides
+    @Singleton
+    fun provideTripDao(appDatabase: AppDatabase): com.example.travelmate.data.local.TripDao {
+        return appDatabase.tripDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideReviewDao(appDatabase: AppDatabase): com.example.travelmate.data.local.ReviewDao {
+        return appDatabase.reviewDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideExpenseDao(appDatabase: AppDatabase): com.example.travelmate.data.local.ExpenseDao {
+        return appDatabase.expenseDao()
+    }
 }

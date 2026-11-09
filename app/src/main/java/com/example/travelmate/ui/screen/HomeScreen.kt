@@ -122,6 +122,21 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // Section: Saved Offline
+            if (uiState.savedOfflineDestinations.isNotEmpty()) {
+                SectionHeader(title = "Địa điểm đã lưu (Ngoại tuyến)", actionText = "")
+                Spacer(modifier = Modifier.height(12.dp))
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(end = 16.dp)
+                ) {
+                    items(uiState.savedOfflineDestinations) { dest ->
+                        RecommendationCard(dest, onClick = { onDestinationClick(dest.id) })
+                    }
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+
             // Section: Recommended for You (Based on Interests)
             SectionHeader(title = "Gợi ý cho bạn", actionText = "")
             Spacer(modifier = Modifier.height(8.dp))
@@ -136,7 +151,7 @@ fun HomeScreen(
                 )
             }
 
-            if (uiState.isLoading) {
+            if (uiState.isLoading && uiState.recommendedDestinations.isEmpty()) {
                 Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = BluePrimary)
                 }

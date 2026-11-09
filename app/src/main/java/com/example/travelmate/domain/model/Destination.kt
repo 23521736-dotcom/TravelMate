@@ -22,7 +22,8 @@ data class Destination(
     @PropertyName("latitude") var latitude: Double = 0.0,
     @PropertyName("longitude") var longitude: Double = 0.0,
     @SerialName("isPromoted") @get:PropertyName("isPromoted") @set:PropertyName("isPromoted") var promoted: Boolean = false,
-    @PropertyName("avgPricePerDay") var avgPricePerDay: Double = 0.0
+    @PropertyName("avgPricePerDay") var avgPricePerDay: Double = 0.0,
+    @get:Exclude @set:Exclude var isSavedOffline: Boolean = false
 ) {
     @get:Exclude
     val isUnesco: Boolean get() = unesco

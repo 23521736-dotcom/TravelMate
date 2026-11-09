@@ -1,6 +1,7 @@
 package com.example.travelmate.ui.screen
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -27,6 +29,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.example.travelmate.domain.model.Category
+import com.example.travelmate.domain.model.User
+import com.example.travelmate.ui.screen.cccd.base64ToBitmap
 import com.example.travelmate.ui.theme.*
 import com.example.travelmate.ui.viewmodel.AuthViewModel
 import com.example.travelmate.ui.viewmodel.HomeViewModel
@@ -46,6 +50,18 @@ fun ProfileScreen(
     val user = uiState.user
 
     var showChangePasswordDialog by remember { mutableStateOf(false) }
+    var showCccdScanner by remember { mutableStateOf(false) }
+
+    if (showCccdScanner) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showCccdScanner = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            com.example.travelmate.ui.screen.cccd.CccdScannerScreen(
+                onDismiss = { showCccdScanner = false }
+            )
+        }
+    }
 
     if (showChangePasswordDialog) {
         ChangePasswordDialog(
@@ -59,12 +75,6 @@ fun ProfileScreen(
                 viewModel.changePassword(old, new)
             }
         )
-    }
-
-    LaunchedEffect(uiState.isSuccess) {
-        if (uiState.isSuccess && showChangePasswordDialog) {
-            // Password changed successfully, handled in AuthViewModel
-        }
     }
 
     Column(
@@ -112,7 +122,6 @@ fun ProfileScreen(
                             color = Color.White
                         )
                     }
-                    // Small edit icon on the image
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
@@ -196,6 +205,19 @@ fun ProfileScreen(
         }
 
         Column(modifier = Modifier.padding(24.dp)) {
+
+            // CCCD Verification Container
+            if (user?.isCccdVerified == true) {
+                Text(text = "Định danh công dân", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                Spacer(modifier = Modifier.height(12.dp))
+                VerifiedCccdCard(user = user, onRescanClick = { showCccdScanner = true })
+                Spacer(modifier = Modifier.height(24.dp))
+            } else {
+                MenuItem(icon = Icons.Default.Badge, title = "Xác minh CCCD gắn chip (QR + NFC)", onClick = {
+                    showCccdScanner = true
+                })
+            }
+
             // Recent Trips Section
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -203,7 +225,7 @@ fun ProfileScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(text = "Chuyến đi gần đây", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                TextButton(onClick = { /* Navigate to Trips tab */ }) {
+                TextButton(onClick = { }) {
                     Text(text = "Xem tất cả", fontSize = 12.sp, color = BluePrimary, fontWeight = FontWeight.Bold)
                 }
             }
@@ -213,8 +235,6 @@ fun ProfileScreen(
             if (homeUiState.totalTrips == 0) {
                 Text(text = "Chưa có chuyến đi nào", color = GrayText, fontSize = 14.sp, modifier = Modifier.padding(vertical = 8.dp))
             } else {
-                // Here we could show a few recent trips if HomeUiState had them. 
-                // For now, let's just show a placeholder that looks better.
                 Text(text = "Bạn có ${homeUiState.totalTrips} chuyến đi trong danh sách.", color = GrayText, fontSize = 14.sp)
             }
 
@@ -247,6 +267,114 @@ fun ProfileScreen(
                 viewModel.logout()
                 onLogoutClick()
             }, isLast = true)
+        }
+    }
+}
+
+@Composable
+fun VerifiedCccdCard(user: User, onRescanClick: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = Color(0xFFF0F9FF),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, BluePrimary.copy(alpha = 0.3f))
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    color = Color(0xFFE8F5E9),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Verified, contentDescription = null, tint = Color(0xFF2E7D32), modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Đã xác minh CCCD gắn chip",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF2E7D32)
+                        )
+                    }
+                }
+
+                TextButton(onClick = onRescanClick) {
+                    Text(text = "Quét lại ↗", fontSize = 12.sp, color = BluePrimary, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val cccdBmp = remember(user.cccdPhotoBase64) {
+                    user.cccdPhotoBase64?.let { base64ToBitmap(it) }
+                }
+
+                if (cccdBmp != null) {
+                    Image(
+                        bitmap = cccdBmp.asImageBitmap(),
+                        contentDescription = "Ảnh CCCD",
+                        modifier = Modifier
+                            .size(60.dp, 75.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .border(1.dp, BluePrimary, RoundedCornerShape(8.dp)),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(60.dp, 75.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color.Gray.copy(alpha = 0.2f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Person, contentDescription = null, tint = GrayText)
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                Column {
+                    Text(
+                        text = user.cccdFullName ?: user.fullName ?: "Công dân Việt Nam",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Số CCCD: ${user.cccdNumber ?: "---"}",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = BluePrimary
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Ngày sinh: ${user.cccdDob ?: "---"} • Giới tính: ${user.cccdGender ?: "---"}",
+                        fontSize = 11.sp,
+                        color = GrayText
+                    )
+                }
+            }
+
+            if (!user.cccdAddress.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(10.dp))
+                HorizontalDivider(color = BluePrimary.copy(alpha = 0.15f))
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Địa chỉ: ${user.cccdAddress}",
+                    fontSize = 11.sp,
+                    color = GrayText,
+                    maxLines = 2,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }
@@ -326,42 +454,6 @@ fun StatItem(number: String, label: String, modifier: Modifier = Modifier) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
         Text(text = number, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
         Text(text = label, fontSize = 12.sp, color = Color.White.copy(alpha = 0.7f))
-    }
-}
-
-@Composable
-fun TripItemSimplified(title: String, location: String, status: String, statusColor: Color, textColor: Color) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp)
-            .border(1.dp, GrayBorder, RoundedCornerShape(12.dp))
-            .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(GrayBackground)
-        )
-        Spacer(modifier = Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-            Text(text = location, color = GrayText, fontSize = 12.sp)
-        }
-        Surface(
-            color = statusColor,
-            shape = RoundedCornerShape(8.dp)
-        ) {
-            Text(
-                text = status,
-                color = textColor,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-            )
-        }
     }
 }
 

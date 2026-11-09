@@ -29,6 +29,7 @@ data class HomeUiState(
     val upcomingTrips: Int = 0,
     val totalReviews: Int = 0,
     val recommendedDestinations: List<Destination> = emptyList(),
+    val savedOfflineDestinations: List<Destination> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null
 )
@@ -59,6 +60,7 @@ class HomeViewModel @Inject constructor(
     fun refreshData() {
         observeUserAndRefresh()
         fetchRecommendedDestinations()
+        fetchSavedOfflineDestinations()
     }
 
     private fun observeUserAndRefresh() {
@@ -108,6 +110,16 @@ class HomeViewModel @Inject constructor(
                     is NetworkResult.Error -> {
                         _uiState.update { it.copy(isLoading = false, error = result.message) }
                     }
+                }
+            }
+        }
+    }
+
+    private fun fetchSavedOfflineDestinations() {
+        viewModelScope.launch {
+            destinationRepository.getSavedOfflineDestinations().collect { result ->
+                if (result is NetworkResult.Success) {
+                    _uiState.update { it.copy(savedOfflineDestinations = result.data) }
                 }
             }
         }

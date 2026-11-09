@@ -24,12 +24,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
-import com.example.travelmate.TravelMateApp
 import com.example.travelmate.domain.model.Destination
 import com.example.travelmate.ui.theme.*
 import com.example.travelmate.ui.viewmodel.AuthViewModel
 import com.example.travelmate.ui.viewmodel.ExploreViewModel
-import com.example.travelmate.ui.viewmodel.SearchMode
 import com.example.travelmate.util.VoiceToTextParser
 
 @Composable
@@ -66,6 +64,14 @@ fun ExploreScreen(
 
     val categories = uiState.categories
     val recentSearches = listOf("Da Lat flowers", "Hanoi street food", "Sa Pa trekking")
+
+    // Single unified search results list
+    val searchResults = remember(uiState.geoapifyDestinations, uiState.filteredDestinations, uiState.searchQuery) {
+        if (uiState.searchQuery.isBlank()) emptyList()
+        else {
+            (uiState.geoapifyDestinations + uiState.filteredDestinations).distinctBy { it.id }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -157,37 +163,11 @@ fun ExploreScreen(
             }
         }
 
-        // Search Mode Selector (when search query is present)
-        AnimatedVisibility(visible = uiState.searchQuery.isNotEmpty()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                FilterChip(
-                    selected = uiState.searchMode == SearchMode.ALL,
-                    onClick = { viewModel.onSearchModeSelect(SearchMode.ALL) },
-                    label = { Text("Tất cả", fontSize = 12.sp) }
-                )
-                FilterChip(
-                    selected = uiState.searchMode == SearchMode.GEOAPIFY_ONLINE,
-                    onClick = { viewModel.onSearchModeSelect(SearchMode.GEOAPIFY_ONLINE) },
-                    label = { Text("🌐 Geoapify API", fontSize = 12.sp) }
-                )
-                FilterChip(
-                    selected = uiState.searchMode == SearchMode.FIRESTORE_ONLY,
-                    onClick = { viewModel.onSearchModeSelect(SearchMode.FIRESTORE_ONLY) },
-                    label = { Text("💾 Firestore", fontSize = 12.sp) }
-                )
-            }
-        }
-
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 20.dp)
         ) {
-            // Show Categories and Recent Searches only when no search query
+            // Show Categories and Recent Searches only when search query is empty
             if (uiState.searchQuery.isEmpty()) {
                 item {
                     LazyRow(
@@ -225,57 +205,13 @@ fun ExploreScreen(
                         }
                     }
                 }
-            }
 
-            // GEOAPIFY ONLINE RESULTS SECTION
-            if (uiState.searchQuery.isNotEmpty() && (uiState.searchMode == SearchMode.ALL || uiState.searchMode == SearchMode.GEOAPIFY_ONLINE)) {
-                item {
-                    Row(
-                        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "🌐 Kết quả Online (Geoapify API)",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp,
-                            color = BluePrimary,
-                            modifier = Modifier.weight(1f)
-                        )
-                        if (uiState.isGeoapifyLoading) {
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = BluePrimary)
-                        }
-                    }
-                }
-
-                if (uiState.geoapifyDestinations.isEmpty() && !uiState.isGeoapifyLoading) {
-                    item {
-                        Text(
-                            text = "Không tìm thấy địa điểm online cho '${uiState.searchQuery}'",
-                            fontSize = 13.sp,
-                            color = GrayText,
-                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-                        )
-                    }
-                } else {
-                    items(uiState.geoapifyDestinations) { destination ->
-                        PopularDestinationCard(
-                            destination = destination,
-                            isWishlisted = wishlistIds.contains(destination.id),
-                            onWishlistToggle = { authViewModel.toggleWishlist(destination.id) },
-                            onClick = { onDestinationClick(destination.id) }
-                        )
-                    }
-                }
-            }
-
-            // FIRESTORE RESULTS / POPULAR DESTINATIONS SECTION
-            if (uiState.searchMode == SearchMode.ALL || uiState.searchMode == SearchMode.FIRESTORE_ONLY) {
                 item {
                     Text(
-                        text = if (uiState.searchQuery.isEmpty()) "Địa điểm nổi bật" else "💾 Kết quả CSDL Firestore",
+                        text = "Địa điểm nổi bật",
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp,
-                        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 12.dp),
+                        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 12.dp),
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 }
@@ -288,6 +224,51 @@ fun ExploreScreen(
                     }
                 } else {
                     items(uiState.filteredDestinations) { destination ->
+                        PopularDestinationCard(
+                            destination = destination,
+                            isWishlisted = wishlistIds.contains(destination.id),
+                            onWishlistToggle = { authViewModel.toggleWishlist(destination.id) },
+                            onClick = { onDestinationClick(destination.id) }
+                        )
+                    }
+                }
+            } else {
+                // Unified Search Results
+                item {
+                    Row(
+                        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Kết quả tìm kiếm",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (uiState.isGeoapifyLoading) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = BluePrimary)
+                        }
+                    }
+                }
+
+                if (searchResults.isEmpty() && !uiState.isGeoapifyLoading) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Không tìm thấy địa điểm phù hợp với '${uiState.searchQuery}'",
+                                fontSize = 14.sp,
+                                color = GrayText
+                            )
+                        }
+                    }
+                } else {
+                    items(searchResults) { destination ->
                         PopularDestinationCard(
                             destination = destination,
                             isWishlisted = wishlistIds.contains(destination.id),
@@ -348,7 +329,13 @@ fun PopularDestinationCard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(text = destination.name, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
+                    Text(
+                        text = destination.name,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f)
+                    )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = onWishlistToggle) {
                             Icon(
@@ -364,26 +351,19 @@ fun PopularDestinationCard(
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFFBC02D), modifier = Modifier.size(14.dp))
-                    Text(text = " ${destination.rating} (${destination.reviewCount})", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = " ${destination.rating} (${destination.reviewCount})",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                     if (destination.isUnesco) {
+                        Spacer(modifier = Modifier.width(8.dp))
                         Surface(color = BluePrimary.copy(alpha = 0.1f), shape = RoundedCornerShape(4.dp)) {
                             Text(
                                 text = "UNESCO",
                                 color = BluePrimary,
                                 fontSize = 10.sp,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-                    }
-                    if (destination.id.startsWith("geoapify_")) {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Surface(color = BluePrimary.copy(alpha = 0.15f), shape = RoundedCornerShape(4.dp)) {
-                            Text(
-                                text = "🌐 Geoapify",
-                                color = BluePrimary,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }

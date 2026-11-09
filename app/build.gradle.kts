@@ -63,6 +63,9 @@ android {
             excludes += "/META-INF/NOTICE.md"
             excludes += "/META-INF/LICENSE.md"
         }
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
 }
 
@@ -116,8 +119,27 @@ dependencies {
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")
 
+    // WorkManager for Offline Sync
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
+    implementation("androidx.hilt:hilt-work:1.2.0")
+    ksp("androidx.hilt:hilt-compiler:1.2.0")
+
     // Chrome Custom Tabs
     implementation("androidx.browser:browser:1.8.0")
+
+    // CameraX
+    val cameraVersion = "1.3.4"
+    implementation("androidx.camera:camera-core:$cameraVersion")
+    implementation("androidx.camera:camera-camera2:$cameraVersion")
+    implementation("androidx.camera:camera-lifecycle:$cameraVersion")
+    implementation("androidx.camera:camera-view:$cameraVersion")
+
+    // ML Kit Barcode Scanning
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
+
+    // NFC & Passport Reader (JMRTD + Scuba)
+    implementation("org.jmrtd:jmrtd:0.7.35")
+    implementation("net.sf.scuba:scuba-sc-android:0.0.23")
 
     // Email
     implementation(libs.sun.mail)

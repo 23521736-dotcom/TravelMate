@@ -3,6 +3,10 @@ package com.example.travelmate.data.model
 import com.example.travelmate.domain.model.Destination
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.doubleOrNull
 
 @Serializable
 data class GeoapifySearchResponse(
@@ -58,8 +62,23 @@ data class GeoapifyProperties(
 @Serializable
 data class GeoapifyGeometry(
     @SerialName("type") val type: String? = null,
-    @SerialName("coordinates") val coordinates: List<Double> = emptyList()
-)
+    @SerialName("coordinates") val coordinatesElement: JsonElement? = null
+) {
+    val coordinates: List<Double>
+        get() {
+            val elem = coordinatesElement ?: return emptyList()
+            val list = mutableListOf<Double>()
+            fun extractDoubles(element: JsonElement) {
+                when (element) {
+                    is JsonPrimitive -> element.doubleOrNull?.let { list.add(it) }
+                    is JsonArray -> element.forEach { extractDoubles(it) }
+                    else -> {}
+                }
+            }
+            extractDoubles(elem)
+            return list
+        }
+}
 
 fun GeoapifyFeature.toDestination(apiKey: String, photoUrl: String? = null): Destination {
     val props = properties ?: GeoapifyProperties()
@@ -189,6 +208,16 @@ private fun getCategoryPhoto(category: String?, categories: List<String>, result
     val allCats = (categories + listOfNotNull(category, resultType)).map { it.lowercase() }
 
     return when {
+        // Specific landmark & nature keyword matchers
+        lower.contains("thông") || lower.contains("cây") || lower.contains("rừng") -> "https://images.unsplash.com/photo-1448375240586-882707db888b"
+        lower.contains("núi") || lower.contains("quỷ") || lower.contains("mountain") || lower.contains("langbiang") -> "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b"
+        lower.contains("thác") || lower.contains("waterfall") -> "https://images.unsplash.com/photo-1432405972618-c60b0225b8f9"
+        lower.contains("hồ") || lower.contains("lake") || lower.contains("tuyền lâm") || lower.contains("xuân hương") -> "https://images.unsplash.com/photo-1506744038136-46273834b3fb"
+        lower.contains("chùa") || lower.contains("đền") || lower.contains("tháp") || lower.contains("pagoda") || lower.contains("temple") -> "https://images.unsplash.com/photo-1548013146-72479768bada"
+        lower.contains("cầu") || lower.contains("bridge") -> "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad"
+        lower.contains("biển") || lower.contains("beach") -> "https://images.unsplash.com/photo-1507525428034-b723cf961d3e"
+        lower.contains("chợ") || lower.contains("market") -> "https://images.unsplash.com/photo-1555396273-367ea4eb4db5"
+
         // Specific city/place keyword overrides
         lower.contains("da lat") || lower.contains("đà lạt") -> "https://images.unsplash.com/photo-1583417319070-4a69db38a482"
         lower.contains("hanoi") || lower.contains("hà nội") -> "https://images.unsplash.com/photo-1509042239860-f550ce710b93"

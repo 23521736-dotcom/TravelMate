@@ -24,9 +24,24 @@ import kotlinx.coroutines.tasks.await
 import java.util.UUID
 import javax.inject.Inject
 
+import com.example.travelmate.data.local.ExpenseDao
+import com.example.travelmate.data.local.SyncStatus
+import com.example.travelmate.data.local.TripDao
+import com.example.travelmate.data.model.toEntity
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.NetworkType
+import androidx.work.Constraints
+import com.example.travelmate.worker.NetworkSyncWorker
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
+
 class TripRepositoryImpl @Inject constructor(
     private val firestore: FirebaseFirestore,
-    private val supabaseService: SupabaseService
+    private val supabaseService: SupabaseService,
+    private val tripDao: TripDao,
+    private val expenseDao: ExpenseDao,
+    @ApplicationContext private val context: Context
 ) : TripRepository {
 
     private val tripsRef = firestore.collection("trips")
@@ -47,6 +62,14 @@ class TripRepositoryImpl @Inject constructor(
     private fun tripLogs(tripId: String) =
         tripLogsRef.document(tripId).collection("logs")
 
+    private fun enqueueSync() {
+        val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+        val syncWork = OneTimeWorkRequestBuilder<NetworkSyncWorker>()
+            .setConstraints(constraints)
+            .build()
+        WorkManager.getInstance(context).enqueue(syncWork)
+    }
+
     override fun createTrip(trip: Trip): Flow<NetworkResult<String>> = callbackFlow {
         android.util.Log.d("TripRepo", "Creating trip for destination: ${trip.destination}")
         trySend(NetworkResult.Loading)
@@ -55,6 +78,13 @@ class TripRepositoryImpl @Inject constructor(
         val shareToken = "t_" + UUID.randomUUID().toString().replace("-", "").take(12)
         val inviteCode = UUID.randomUUID().toString().replace("-", "").take(6).uppercase()
         val finalTrip = trip.copy(id = tripId, shareToken = shareToken, inviteCode = inviteCode)
+
+        // Save offline first
+        try {
+            tripDao.insertTrip(finalTrip.toEntity(SyncStatus.PENDING_CREATE))
+        } catch (e: Exception) {
+            android.util.Log.w("TripRepo", "Could not cache trip locally: ${e.message}")
+        }
 
         launch {
             try {
@@ -80,12 +110,15 @@ class TripRepositoryImpl @Inject constructor(
                 batch.set(inviteCodesRef.document(inviteCode), mapOf("tripId" to tripId))
                 batch.set(shareTokensRef.document(shareToken), mapOf("tripId" to tripId))
                 batch.commit().await()
+                
+                try { tripDao.updateSyncStatus(tripId, SyncStatus.SYNCED) } catch (_: Exception) {}
 
                 android.util.Log.d("TripRepo", "Trip created successfully with ID: $tripId")
                 trySend(NetworkResult.Success(tripId))
             } catch (e: Exception) {
-                android.util.Log.e("TripRepo", "Failed to create trip", e)
-                trySend(NetworkResult.Error("Loi tao chuyen di: ${e.message}"))
+                android.util.Log.e("TripRepo", "Failed to create trip online, scheduled for sync", e)
+                enqueueSync()
+                trySend(NetworkResult.Success(tripId)) // Success because it's saved locally
             } finally {
                 close()
             }

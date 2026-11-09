@@ -175,7 +175,7 @@ fun DestinationDetailScreen(
                             modifier = Modifier
                                 .statusBarsPadding()
                                 .align(Alignment.TopEnd)
-                                .padding(16.dp)
+                                .padding(top = 16.dp, end = 16.dp, bottom = 16.dp, start = 0.dp)
                                 .size(42.dp)
                                 .clip(CircleShape)
                                 .background(Color.Black.copy(alpha = 0.35f))
@@ -184,6 +184,24 @@ fun DestinationDetailScreen(
                                 imageVector = if (isWishlisted) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                                 contentDescription = "Favorite",
                                 tint = if (isWishlisted) Color.Red else Color.White
+                            )
+                        }
+
+                        // Glassmorphism Download (Save Offline) Button
+                        IconButton(
+                            onClick = { viewModel.toggleSaveOffline() },
+                            modifier = Modifier
+                                .statusBarsPadding()
+                                .align(Alignment.TopEnd)
+                                .padding(top = 16.dp, end = 66.dp, bottom = 16.dp, start = 0.dp)
+                                .size(42.dp)
+                                .clip(CircleShape)
+                                .background(Color.Black.copy(alpha = 0.35f))
+                        ) {
+                            Icon(
+                                imageVector = if (destination.isSavedOffline) Icons.Default.DownloadDone else Icons.Default.Download,
+                                contentDescription = "Save Offline",
+                                tint = if (destination.isSavedOffline) Color.Green else Color.White
                             )
                         }
 

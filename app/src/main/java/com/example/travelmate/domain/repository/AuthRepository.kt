@@ -34,4 +34,12 @@ interface AuthRepository {
     suspend fun changePassword(oldPassword: String, newPassword: String): NetworkResult<Unit>
     fun observeUser(): Flow<User?>
     fun listenToUserRealtime(uid: String): Flow<User?>
+    fun saveCccdVerification(
+        cccdNumber: String,
+        fullName: String,
+        dob: String,
+        gender: String,
+        address: String,
+        photoBase64: String?
+    ): Flow<NetworkResult<User>>
 }

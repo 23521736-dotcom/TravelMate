@@ -319,20 +319,9 @@ fun TripDetailScreen(
                         3 -> PhotosTab(
                             urls = trip?.galleryUrls ?: emptyList(),
                             canEdit = canEdit,
-                            onAddPhotos = { uriStrings ->
-                                val byteArrayList = mutableListOf<ByteArray>()
-                                uriStrings.forEach { uriString ->
-                                    val uri = android.net.Uri.parse(uriString)
-                                    try {
-                                        context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                                            byteArrayList.add(inputStream.readBytes())
-                                        }
-                                    } catch (e: Exception) {
-                                        e.printStackTrace()
-                                    }
-                                }
-                                if (byteArrayList.isNotEmpty()) {
-                                    viewModel.addPhotos(byteArrayList)
+                            onAddPhotos = { uris ->
+                                if (uris.isNotEmpty()) {
+                                    viewModel.addPhotosWithUris(context, uris)
                                 }
                             },
                             onDeletePhoto = { url -> viewModel.deletePhoto(url) },
@@ -703,12 +692,12 @@ fun ExpensesTabContentHighFidelity(
 }
 
 @Composable
-fun PhotosTab(urls: List<String>, canEdit: Boolean, onAddPhotos: (List<String>) -> Unit, onDeletePhoto: (String) -> Unit, onPhotoClick: (String) -> Unit) {
+fun PhotosTab(urls: List<String>, canEdit: Boolean, onAddPhotos: (List<android.net.Uri>) -> Unit, onDeletePhoto: (String) -> Unit, onPhotoClick: (String) -> Unit) {
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickMultipleVisualMedia(),
         onResult = { uris ->
             if (uris.isNotEmpty()) {
-                onAddPhotos(uris.map { it.toString() })
+                onAddPhotos(uris)
             }
         }
     )

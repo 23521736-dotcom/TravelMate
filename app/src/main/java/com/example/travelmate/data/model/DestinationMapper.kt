@@ -20,7 +20,8 @@ fun DestinationEntity.toDomainModel(): Destination {
         latitude = this.latitude,
         longitude = this.longitude,
         promoted = this.isPromoted,
-        avgPricePerDay = this.avgPricePerDay
+        avgPricePerDay = this.avgPricePerDay,
+        isSavedOffline = this.isSavedOffline
     )
 }
 
@@ -42,6 +43,7 @@ fun Destination.toEntity(): DestinationEntity {
         longitude = this.longitude,
         isPromoted = this.promoted,
         avgPricePerDay = this.avgPricePerDay,
-        cacheTimestamp = System.currentTimeMillis()
+        cacheTimestamp = System.currentTimeMillis(),
+        isSavedOffline = this.isSavedOffline
     )
 }

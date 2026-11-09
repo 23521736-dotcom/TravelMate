@@ -11,6 +11,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
@@ -311,18 +312,44 @@ class TripDetailViewModel @Inject constructor(
         }
     }
 
-    fun addPhotos(byteArrayList: List<ByteArray>) {
+    fun addPhotosWithUris(context: android.content.Context, uris: List<android.net.Uri>) {
         val tripId = _uiState.value.trip?.id ?: return
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            byteArrayList.forEach { bytes ->
-                tripRepository.uploadImage("gallery/$tripId/${UUID.randomUUID()}.jpg", bytes).collect { result ->
-                    if (result is NetworkResult.Success) {
-                        tripRepository.addGalleryPhoto(tripId, result.data).collect { }
+            var successCount = 0
+
+            for (uri in uris) {
+                val compressedBytes = com.example.travelmate.util.ImageCompressor.compressImageUri(
+                    context = context,
+                    uri = uri,
+                    maxDimension = 1200,
+                    quality = 80
+                )
+                if (compressedBytes != null) {
+                    val path = "gallery/$tripId/${UUID.randomUUID()}.jpg"
+                    try {
+                        val uploadResult = tripRepository.uploadImage(path, compressedBytes)
+                            .first { it !is NetworkResult.Loading }
+                        
+                        if (uploadResult is NetworkResult.Success) {
+                            val photoUrl = uploadResult.data
+                            val addResult = tripRepository.addGalleryPhoto(tripId, photoUrl)
+                                .first { it !is NetworkResult.Loading }
+                            
+                            if (addResult is NetworkResult.Success) {
+                                successCount++
+                            }
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("TripDetailVM", "Error uploading gallery photo: ${e.message}", e)
                     }
                 }
             }
-            logAction(TripLog.ACTION_UPDATE_TRIP, "Đã thêm ${byteArrayList.size} ảnh vào bộ sưu tập")
+
+            if (successCount > 0) {
+                logAction(TripLog.ACTION_UPDATE_TRIP, "Đã thêm $successCount ảnh vào bộ sưu tập")
+            }
+
             _uiState.update { it.copy(isLoading = false) }
             getTrip(tripId)
         }

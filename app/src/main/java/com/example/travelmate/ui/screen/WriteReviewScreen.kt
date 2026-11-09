@@ -73,10 +73,7 @@ fun WriteReviewScreen(
         bottomBar = {
             Button(
                 onClick = {
-                    val imageBytes = selectedImages.mapNotNull { uri ->
-                        context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                    }
-                    viewModel.submitReview(destinationId, rating, comment, imageBytes)
+                    viewModel.submitReviewWithUris(context, destinationId, rating, comment, selectedImages)
                 },
                 modifier = Modifier
                     .fillMaxWidth()

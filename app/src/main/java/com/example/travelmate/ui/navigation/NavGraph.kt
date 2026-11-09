@@ -1,10 +1,11 @@
 package com.example.travelmate.ui.navigation
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
@@ -23,27 +24,32 @@ fun NavGraph(
 ) {
     val authUiState by authViewModel.uiState.collectAsState()
 
-    // Determine initial route once to avoid NavHost recreation
-    val startRoute = remember(authUiState.isCheckingSession, authUiState.user, authUiState.isAwaitingEmailVerification) {
-        val user = authUiState.user
-        if (authUiState.isCheckingSession) null
-        else if (user != null && !authUiState.isAwaitingEmailVerification) {
-            if (user.displayName.isNullOrEmpty() || user.interests.isEmpty()) Screen.CompleteProfile.route
-            else Screen.Main.route
+    // Automatic Session Navigation Listener
+    LaunchedEffect(authUiState.isCheckingSession, authUiState.user, authUiState.isAwaitingEmailVerification) {
+        if (!authUiState.isCheckingSession) {
+            val user = authUiState.user
+            val targetRoute = when {
+                user != null && !authUiState.isAwaitingEmailVerification -> {
+                    if (user.displayName.isNullOrEmpty() || user.interests.isEmpty()) Screen.CompleteProfile.route
+                    else Screen.Main.route
+                }
+                else -> Screen.Login.route
+            }
+
+            val currentRoute = navController.currentDestination?.route
+            if (currentRoute == null || currentRoute != targetRoute) {
+                android.util.Log.d("NavGraph", "Navigating from $currentRoute to $targetRoute")
+                navController.navigate(targetRoute) {
+                    popUpTo(0) { inclusive = true }
+                }
+            }
         }
-        else Screen.Login.route
     }
 
-    LaunchedEffect(authUiState.isCheckingSession, authUiState.user, startRoute) {
-        android.util.Log.d("NavGraph", "isCheckingSession: ${authUiState.isCheckingSession}, user: ${authUiState.user?.email}, startRoute: $startRoute")
-    }
-
-    if (startRoute == null) {
-        SplashScreen()
-    } else {
+    Box(modifier = Modifier.fillMaxSize()) {
         NavHost(
             navController = navController,
-            startDestination = startRoute,
+            startDestination = Screen.Login.route,
             modifier = modifier
         ) {
             composable(Screen.Login.route) {
@@ -92,7 +98,7 @@ fun NavGraph(
                     onBackClick = { navController.popBackStack() },
                     onLoginClick = { navController.navigate(Screen.Login.route) },
                     onSignUpComplete = { 
-                        // Do nothing, stay on SignUpScreen to show OTP input
+                        // Stay on SignUpScreen to show OTP input
                     }
                 )
             }
@@ -323,6 +329,11 @@ fun NavGraph(
                     onSuccess = { navController.popBackStack() }
                 )
             }
+        }
+
+        // Display SplashScreen overlay while checking session
+        if (authUiState.isCheckingSession) {
+            SplashScreen()
         }
     }
 }

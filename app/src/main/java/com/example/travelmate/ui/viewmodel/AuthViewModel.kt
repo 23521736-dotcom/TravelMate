@@ -424,6 +424,23 @@ class AuthViewModel @Inject constructor(
         }
     }
 
+    fun saveCccdVerification(
+        cccdNumber: String,
+        fullName: String,
+        dob: String,
+        gender: String,
+        address: String,
+        photoBase64: String?
+    ) {
+        viewModelScope.launch {
+            repository.saveCccdVerification(cccdNumber, fullName, dob, gender, address, photoBase64).collect { result ->
+                if (result is NetworkResult.Success) {
+                    _uiState.update { it.copy(user = result.data) }
+                }
+            }
+        }
+    }
+
     private fun isValidEmail(email: String): Boolean {
         return android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()
     }

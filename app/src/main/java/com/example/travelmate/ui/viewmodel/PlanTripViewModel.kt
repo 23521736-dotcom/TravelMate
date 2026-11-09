@@ -62,9 +62,18 @@ class PlanTripViewModel @Inject constructor(
 
     private fun fetchDestinations() {
         viewModelScope.launch {
-            destinationRepository.getDestinations().collect { result ->
+            destinationRepository.getSavedOfflineDestinations().collect { result ->
                 if (result is NetworkResult.Success) {
-                    _uiState.update { it.copy(destinations = result.data) }
+                    val savedDestinations = result.data
+                    if (savedDestinations.isNotEmpty()) {
+                        _uiState.update { it.copy(destinations = savedDestinations) }
+                    } else {
+                        // Fallback if no saved offline places
+                        val all = destinationRepository.getDestinations().first()
+                        if (all is NetworkResult.Success) {
+                            _uiState.update { it.copy(destinations = all.data) }
+                        }
+                    }
                 }
             }
         }

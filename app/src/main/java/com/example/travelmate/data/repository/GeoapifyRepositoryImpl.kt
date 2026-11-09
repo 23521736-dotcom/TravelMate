@@ -101,8 +101,12 @@ class GeoapifyRepositoryImpl @Inject constructor(
                 lang = "vi"
             )
             val destinations = response.features.mapNotNull { feature ->
-                val dest = feature.toDestination(geoapifyKey)
-                if (dest.name.isBlank()) null else dest
+                val basicDest = feature.toDestination(geoapifyKey)
+                if (basicDest.name.isBlank()) null
+                else {
+                    val photoUrl = fetchImageForPlace(basicDest.name)
+                    feature.toDestination(geoapifyKey, photoUrl)
+                }
             }
             emit(NetworkResult.Success(destinations))
         } catch (e: Exception) {

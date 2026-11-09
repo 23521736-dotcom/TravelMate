@@ -40,4 +40,10 @@ interface DestinationDao {
 
     @Query("UPDATE destinations SET wikiDescription = :desc, wikiArticleUrl = :url, wikiLastUpdated = :timestamp WHERE id = :id")
     fun updateWikiInfo(id: String, desc: String?, url: String?, timestamp: Long): Int
+
+    @Query("SELECT * FROM destinations WHERE isSavedOffline = 1 ORDER BY name ASC")
+    fun getSavedOfflineDestinations(): Flow<List<DestinationEntity>>
+
+    @Query("UPDATE destinations SET isSavedOffline = :isSaved WHERE id = :id")
+    fun updateOfflineSavedStatus(id: String, isSaved: Boolean): Int
 }
